@@ -2,7 +2,7 @@
 <style>
   body { margin: 0; font-family: sans-serif; }
   .ic { width: 24px; height: 24px; display: block; }
-  .dot { width: 6px; height: 6px; border-radius: 50%; background: #c7c7c7; display: inline-block; }
+  .dot { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 50%; background: #c7c7c7; display: inline-block; }
   .dot.on { background: #0095f6; }
 </style></head><body>
 <article id="post" style="width:470px;margin:20px auto">
@@ -16,7 +16,8 @@
       <video playsinline muted style="width:470px;height:470px;flex:none;background:#222"></video>
     </div>
   </div>
-  <div id="dots" style="display:flex;gap:4px;justify-content:center;padding:6px"><span class="dot"></span><span class="dot on"></span><span class="dot"></span></div>
+  <!-- As on the real site: buttons, the current one aria-current="step" (all drawn alike here) -->
+  <div id="dots" style="display:flex;gap:4px;justify-content:center;padding:6px"><button class="dot" aria-label="Go to slide 1"></button><button class="dot" aria-label="Go to slide 2" aria-current="step"></button><button class="dot" aria-label="Go to slide 3"></button></div>
   <section style="display:flex;justify-content:space-between;width:470px">
     <span style="display:flex;gap:16px">
       <span><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></span>
@@ -30,7 +31,7 @@
   // Shows album item i (0-based), as Instagram's arrows would.
   window.showItem = (i) => {
     document.getElementById('strip').style.transform = `translateX(${-470 * i}px)`;
-    document.querySelectorAll('.dot').forEach((d, n) => d.classList.toggle('on', n === i));
+    document.querySelectorAll('.dot').forEach((d, n) => (n === i ? d.setAttribute('aria-current', 'step') : d.removeAttribute('aria-current')));
   };
 </script>
 </body></html>

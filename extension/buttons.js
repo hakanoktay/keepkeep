@@ -336,8 +336,9 @@
   //
   // An album shows one item at a time; the others sit beside it, clipped.
   // A photo is matched by its file name (the same across sizes); a video
-  // (often a blob: address) by the album's dots under the picture: one dot
-  // per item, the current one drawn differently from the rest.
+  // (often a blob: address) by the album's dots under the picture: one per
+  // item; Instagram marks the current one aria-current="step" (checked on the
+  // real site), else it's the one drawn differently from the rest.
 
   const postOfGroup = new WeakMap(); // action group → { code, container }
 
@@ -359,6 +360,11 @@
   // The album's dots: small round boxes in one row; returns the index of the
   // one that looks different (the current item) and how many there are.
   function albumDots(container) {
+    const current = container.querySelector('[aria-current="step"]');
+    if (current?.parentElement) {
+      const all = [...current.parentElement.children];
+      if (all.length >= 2) return { index: all.indexOf(current), count: all.length };
+    }
     const dots = [...container.querySelectorAll('div, span')].filter((d) => {
       const r = d.getBoundingClientRect();
       return r.width >= 3 && r.width <= 10 && Math.abs(r.width - r.height) < 1 && !d.children.length && parseFloat(getComputedStyle(d).borderTopLeftRadius) >= r.width * 0.4;
