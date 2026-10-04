@@ -138,6 +138,11 @@ Click a photo to open it at its original size, with zoom; view profile pictures 
 
 Hide suggested posts, ads and like counts in the feed; switched on and off in the settings.
 
+### On hold: things Instagram's website doesn't give us (checked 2026-10-04)
+
+- **Full-size profile pictures.** The web pages only carry the profile picture at 150 px (even the field called "hd"). The full size (up to 1080 px) comes only from `/api/v1/users/<id>/info/` (`hd_profile_pic_url_info`), which answered 429 for days from the web client (the mobile app's endpoint, it seems); `web_profile_info` is rate-limited too. Picture URLs are signed, so they can't be enlarged by editing them. Try a single request again now and then; if it opens, add a Download button to the profile picture. Until then: no profile picture download (150 px isn't worth it).
+- **The first story of an account, when it's a video, can't be saved with Media until the next story.** When a story is opened from the tray, the address is `/stories/<username>/` (no id) for a while; a photo story still has its id in the picture's `ig_cache_key`, but a video plays from `blob:` with no id. Highlights solve this with the progress bar indexed into `reels_media`, but for a user's stories that list needs the account's numeric id, which only the rate-limited profile endpoints give. Download (D) is not affected.
+
 ## Under consideration
 
 Ideas to think through before they're planned.

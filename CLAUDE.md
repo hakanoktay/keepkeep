@@ -83,6 +83,13 @@ There is no build step; `extension/` is loaded unpacked as is.
   `m:story:<pk>` with `type: 'highlight'`, `highlightId`.
 - **Saved stories' type** is what Instagram reports (`story-video`,
   `story-photo`); classify stories by the `story:` key, not by type.
+- **Rate limits (2026-10-04):** `/api/v1/users/<id>/info/` and
+  `web_profile_info` answer 429 to the web client, for days. Don't build on
+  them; full-size profile pictures and the first-video-story case are on hold
+  for that reason (`ROADMAP.md`, "On hold"). Many quick real-site checks in a
+  row trigger 429s on the owner's account: keep real-site probes few.
+- **Album dots:** buttons "Go to slide n"; the current one has
+  `aria-current="step"`.
 - **Theme:** CSS variables (`--accent`, `--blue-5`, `--ig-primary-button`, …)
   and `__fb-light-mode` / `__fb-dark-mode` classes.
 - **Videos:** a single progressive file only up to ~720p; 1080p is DASH
