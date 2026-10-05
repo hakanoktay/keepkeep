@@ -27,7 +27,11 @@ There is no build step; `extension/` is loaded unpacked as is.
   `chrome.storage.local` survives every store update, but only if the code
   still understands it: any change to the stored format must read the old
   format and migrate it (in `basket.js`), never reset or drop keys. Test an
-  update from the 1.0.0 data before releasing.
+  update from the 1.0.0 data before releasing: `tests/update.spec.js` installs
+  1.0.0 from git (commit 4864539), fills it through its own code, then opens the same
+  profile with today's extension/ and checks every record survives and shows. (For
+  --load-extension Chrome reports that relaunch as 'install', not 'update'; which page
+  opens on update is covered by `pagesToOpen` tests.)
 
 ## Layout
 
