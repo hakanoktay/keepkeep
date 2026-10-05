@@ -2,9 +2,9 @@
 const { test, expect } = require('./fixtures');
 
 const OPTIONS = [
-  ['best', 'Best (recommended)', 'Up to 1080p, plays everywhere. Takes a few seconds longer.'],
-  ['original', 'Original', 'Up to 1080p, exactly as Instagram stores it. Fastest, but may not open in QuickTime, Photos or iMovie.'],
-  ['standard', 'Standard', 'Up to 720p, a single file, fastest. The size Instagram plays on the web.'],
+  ['standard', 'Standard (recommended)', "Up to 720p, H.264 MP4, Instagram's own single file. Instant, opens everywhere."],
+  ['original', 'Original', "Up to 1080p, VP9 MP4, exactly as Instagram stores it. Instant and smaller, but QuickTime, Photos, iMovie and iPhone can't open it."],
+  ['best', 'Best (recommended)', 'Up to 1080p, H.264 MP4. Opens on every device and app. Takes a few seconds longer.'],
 ];
 
 async function openPopup(context, extensionId) {
