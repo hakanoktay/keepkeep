@@ -11,11 +11,11 @@ const ALBUM = { items: [{
     { media_type: 2, ...img('V3'), video_versions: [{ url: 'https://scontent.cdninstagram.com/v/t50/V3.mp4', width: 720, height: 720 }] }],
 }] };
 
-async function openAlbum(context) {
+async function openAlbum(context, url = 'https://www.instagram.com/?page=album') {
   await context.route(/\/api\/v1\/media\/\d+\/info\//, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(ALBUM) }));
   const page = await context.newPage();
   await page.setViewportSize({ width: 1000, height: 800 });
-  await page.goto('https://www.instagram.com/?page=album');
+  await page.goto(url);
   const download = page.locator('[data-keepkeep="action-group"] button').nth(2);
   await expect(download).toBeVisible({ timeout: 5000 });
   return { page, download, names: page.locator('#keepkeep-downloads .bubble.item .name') };
@@ -37,6 +37,28 @@ test('D over the post saves the video on screen (found by the album dots)', asyn
   const { page, names } = await openAlbum(context);
   await page.evaluate(() => showItem(2));
   await page.mouse.move(500, 300);
+  await page.keyboard.press('d');
+  await expect(names).toHaveText([/^alice_\d{10}_3\.mp4$/]);
+});
+
+// The post's own page: the album sits outside the action bar's panel and has no
+// aria-current dots; the address says which item is shown (?img_index=n).
+const POST = 'https://www.instagram.com/p/ALB1/';
+test('post page: Shift-click saves the item named by ?img_index', async ({ context }) => {
+  const { download, names } = await openAlbum(context, `${POST}?img_index=2&page=album-post`);
+  await download.click({ modifiers: ['Shift'] });
+  await expect(names).toHaveText([/^alice_\d{10}_2\.jpg$/]);
+});
+
+test('post page without img_index: the first item', async ({ context }) => {
+  const { download, names } = await openAlbum(context, `${POST}?page=album-post`);
+  await download.click({ modifiers: ['Shift'] });
+  await expect(names).toHaveText([/^alice_\d{10}_1\.jpg$/]);
+});
+
+test('post page: D works wherever the pointer is', async ({ context }) => {
+  const { page, names } = await openAlbum(context, `${POST}?img_index=3&page=album-post`);
+  await page.mouse.move(250, 250); // over the album, outside the post's panel
   await page.keyboard.press('d');
   await expect(names).toHaveText([/^alice_\d{10}_3\.mp4$/]);
 });

@@ -384,7 +384,19 @@
   }
 
   // What's on screen in a post: { fileKey } for a photo, { index } from the dots, or null.
-  function itemOnScreen(container) {
+  // The post's own page (/p/<code>/, also when opened over the feed or a
+  // profile): Instagram keeps the album position in the address as
+  // ?img_index=n (1-based; absent on the first item), and the media sits
+  // outside the action bar's part of the page, so the address is the answer.
+  function indexFromAddress(code) {
+    if (KeepKeep.parse(location.href)?.code !== code) return null;
+    const n = parseInt(new URLSearchParams(location.search).get('img_index'), 10);
+    return { index: n >= 1 ? n - 1 : 0 };
+  }
+
+  function itemOnScreen(container, code) {
+    const fromAddress = indexFromAddress(code);
+    if (fromAddress) return fromAddress;
     const media = [...container.querySelectorAll('img, video')].filter((m) => m.getBoundingClientRect().width >= 150);
     const best = media.map((m) => [m, visibleRatio(m)]).sort((a, b) => b[1] - a[1])[0];
     if (!best || best[1] < 0.5) return null;
@@ -397,7 +409,7 @@
   }
 
   async function downloadOnScreen(code, container) {
-    const only = itemOnScreen(container);
+    const only = itemOnScreen(container, code);
     if (only) await KeepKeepDrop.download(code, only);
     else KeepKeepPanel.showError("Couldn't tell which one is on screen");
   }
@@ -411,6 +423,14 @@
     if (!under) return;
     for (const group of document.querySelectorAll('[data-keepkeep="action-group"]')) {
       const post = postOfGroup.get(group);
+      // On the post's own page the media isn't inside the post's part of the
+      // page: the address names the post, wherever the pointer is.
+      if (post && indexFromAddress(post.code)) {
+        e.preventDefault();
+        e.stopPropagation();
+        downloadOnScreen(post.code, post.container);
+        return;
+      }
       if (!post?.container.contains(under)) continue;
       e.preventDefault();
       e.stopPropagation();
