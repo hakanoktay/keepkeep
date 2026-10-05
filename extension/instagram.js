@@ -129,16 +129,56 @@ var InstaApi = (() => {
     }
   }
 
-  // Every photo / video of a post (all items of an album), each in the highest
-  // resolution Instagram offers (photos in their uploaded size unless
-  // `originals` is false), plus the owner and publish time for file names.
+  // The video's DASH manifest: its largest video and best audio, when that
+  // video is bigger than the largest single file (those stop at 720p).
+  // `fallbackHeight` is that single file's size in the "720p" sense (its
+  // shorter side: 720 for a 720x1280 reel), shown when it is saved instead.
+  // Returns null when there is no usable manifest.
+  function dashOf(m) {
+    try {
+      if (typeof m.video_dash_manifest !== 'string') return null;
+      const doc = new DOMParser().parseFromString(m.video_dash_manifest, 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) return null;
+      const videos = [];
+      const audios = [];
+      for (const r of doc.getElementsByTagName('Representation')) {
+        const mime = r.getAttribute('mimeType') || r.parentElement?.getAttribute('mimeType') || '';
+        const base = r.getElementsByTagName('BaseURL')[0]?.textContent.trim();
+        let u;
+        try { u = new URL(base); } catch { continue; }
+        if (u.protocol !== 'https:' || !/(^|\.)(cdninstagram\.com|fbcdn\.net)$/.test(u.hostname)) continue;
+        const bandwidth = Number(r.getAttribute('bandwidth')) || 0;
+        const codec = r.getAttribute('codecs') || '';
+        if (mime.startsWith('video/')) videos.push({ url: base, width: Number(r.getAttribute('width')) || 0, height: Number(r.getAttribute('height')) || 0, codec, bandwidth });
+        else if (mime.startsWith('audio/')) audios.push({ url: base, codec, bandwidth });
+      }
+      if (!videos.length) return null;
+      const area = (v) => (v.width || 0) * (v.height || 0);
+      const video = videos.reduce((a, b) => (area(b) > area(a) || (area(b) === area(a) && b.bandwidth > a.bandwidth) ? b : a));
+      const single = (m.video_versions || []).reduce((a, b) => (area(b) > area(a) ? b : a), {});
+      if (area(video) <= area(single)) return null;
+      // A video with sound but no audio file in the manifest: the single file has the sound, a join wouldn't.
+      if (!audios.length && m.has_audio === true) return null;
+      const audio = audios.length ? audios.reduce((a, b) => (b.bandwidth > a.bandwidth ? b : a)) : null;
+      return {
+        video, audio, duration: typeof m.video_duration === 'number' ? m.video_duration : null,
+        fallbackHeight: Math.min(single.width || 0, single.height || 0) || null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   // Each photo / video of an API item (all items of an album), in the largest listed size.
   function filesOf(item) {
     const parts = item.carousel_media?.length ? item.carousel_media : [item];
     const largest = (list) => list.reduce((a, b) => ((b.width || 0) * (b.height || 0) > (a.width || 0) * (a.height || 0) ? b : a));
     return parts.map((m) => {
       const thumb = pick(m.image_versions2?.candidates, 150); // small preview (a video's cover)
-      if (m.video_versions?.length) return { url: largest(m.video_versions).url, kind: 'video', thumb };
+      if (m.video_versions?.length) {
+        const dash = dashOf(m);
+        return { url: largest(m.video_versions).url, kind: 'video', thumb, ...(dash && { dash }) };
+      }
       if (m.image_versions2?.candidates?.length) return { url: largest(m.image_versions2.candidates).url, kind: 'image', thumb };
       return null;
     }).filter(Boolean);
@@ -181,6 +221,24 @@ var InstaApi = (() => {
     };
   }
 
+  // A highlight (the id in /stories/highlights/<id>/): its owner, title and
+  // every story in it, in the highlight's order.
+  async function highlight(id) {
+    const reelId = 'highlight:' + id;
+    const j = await json(`/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(reelId)}`);
+    const reel = j.reels?.[reelId] || j.reels_media?.[0];
+    if (!reel) throw new Error('highlight not found');
+    return {
+      username: reel.user?.username?.toLowerCase() || null,
+      title: reel.title || null,
+      pks: (reel.items || []).map((it) => String(it.pk)), // every story, in the viewer's order
+      items: (reel.items || []).map((it) => ({ takenAt: it.taken_at || null, files: filesOf(it) })).filter((it) => it.files.length),
+    };
+  }
+
+  // Every photo / video of a post (all items of an album), each in the highest
+  // resolution Instagram offers (photos in their uploaded size unless
+  // `originals` is false), plus the owner and publish time for file names.
   async function mediaFiles(code, { originals: wantOriginals = true } = {}) {
     const { items } = await json(`/api/v1/media/${codeToId(code)}/info/`);
     const item = items[0];
@@ -202,5 +260,5 @@ var InstaApi = (() => {
     };
   }
 
-  return { profile, media, mediaFiles, story, storyReel, thumbnail, codeToId };
+  return { profile, media, mediaFiles, filesOf, dashOf, story, storyReel, highlight, thumbnail, codeToId, fileKey };
 })();

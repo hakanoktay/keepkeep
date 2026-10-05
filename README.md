@@ -2,7 +2,7 @@
 
 ![KeepKeep – keep what you find on Instagram](store/assets/promo-marquee-1400x560.png)
 
-A Chrome extension for instagram.com: save profiles and posts to your own lists, download photos and videos in full quality, watch stories anonymously and skip through any video. Everything stays in your browser.
+**KeepKeep – Downloader & Anonymous Story Viewer for Instagram** is a Chrome extension for instagram.com: save profiles and posts to your own lists, download photos and videos in full quality, watch stories anonymously and skip through any video. Everything stays in your browser.
 
 | | |
 | --- | --- |
@@ -16,14 +16,14 @@ A Chrome extension for instagram.com: save profiles and posts to your own lists,
 - A card appears in the top-right corner; drop the link on it.
 - Or use the icons at the top of the extension's popup: **Profile**, **Media** and **Download** act on the post or profile open in the current tab (⚙ opens the settings).
 
-There are also **🧺 Add to basket** buttons on Instagram itself:
+There are also KeepKeep buttons on Instagram itself:
 
 - **Profile**, **Media** and **Download** icons in every post's action bar, just left of Instagram's save icon (home feed, post page and post popup),
 - in the corner of post thumbnails when you hover them (profile grid, explore),
-- next to the Follow button on profile pages,
+- **Save profile** next to the Follow button on profile pages,
 - in the Reels viewer, icons at the top of the right-hand icon column: **Profile** adds the reel's owner, **Media** adds the reel itself, **Download** downloads it.
 
-Once an item is saved its button shows **✓ In basket**. Hovering it turns it into a red **Remove** (like "Following" → "Unfollow" on Instagram); clicking removes the item, and the corner card offers **Undo** for a few seconds.
+Once an item is saved its button turns green and shows **Saved**. Hovering it turns it into a red **Remove** (like "Following" → "Unfollow" on Instagram); clicking removes the item, and the corner card offers **Undo** for a few seconds.
 
 ### Stories
 
@@ -37,11 +37,28 @@ Like a private window, Instagram "wears the veil" while it's on (`extension/veil
 
 ### Downloading
 
-**Download** saves every photo and video of a post in the highest resolution Instagram offers. Files are named after the owner and the time the post was published, e.g. `telma_2507271432.jpg` (YYMMDDHHmm); album items get a number: `telma_2507271432_1.jpg`, `telma_2507271432_2.mp4`.
+**Download** saves every photo and video of a post in the highest resolution Instagram offers. **Shift-click** it, or press **D** with the pointer over the post, to save only the photo or video on screen of an album. Files are named after the owner and the time the post was published, e.g. `telma_2507271432.jpg` (YYMMDDHHmm); album items get a number: `telma_2507271432_1.jpg`, `telma_2507271432_2.mp4`.
 
 Files go straight to `Downloads/KeepKeep/`, each photo and video as its own file – no ZIP, no questions, no windows.
 
 Photos come in their uploaded size (up to 3072 px, found on the post's embed page) or, if you pick **Standard** in the popup's settings (⚙), in the largest size Instagram shows (up to 1080 px). If the original can't be fetched, the standard size is used.
+
+#### Video quality: what you get and why
+
+**Why there's a choice at all.** Instagram keeps two versions of a video. One is a single file that plays everywhere, but it stops at about 720p. The other is the full quality, up to 1080p, but it comes as two separate files, picture and sound, and the picture is in a format called VP9. Your browser joins the two and plays VP9 without a problem, which is why videos look sharp on instagram.com. Once a video is saved to your computer, though, VP9 doesn't open everywhere: on a Mac, QuickTime, Photos and iMovie can't open it, nor can the Photos app on an iPhone, and some editing apps and messaging apps refuse it. Chrome, VLC, Android and most of Windows play it fine.
+
+So KeepKeep always joins the picture and the sound into one MP4 file (instantly, without any loss), and lets you choose the format. In the popup's settings (⚙) or KeepKeep's Settings page, under **Video quality**:
+
+- **Best (recommended)** — up to 1080p, converted to H.264, the format every phone, computer and app opens. It takes a few seconds longer (about 10 seconds for a 45-second reel on a recent Mac; slower on computers without a hardware video encoder, such as many Linux PCs) and the file is larger (about 35 MB for 45 seconds of 1080p). The conversion is done by Chrome on your computer; nothing is uploaded anywhere. The difference from the original is too small to see.
+- **Original** — up to 1080p, exactly as Instagram stores it: instant, smaller, no conversion at all, but in VP9, so it may not open in the apps listed above.
+- **Standard** — Instagram's single file, up to about 720p, the fastest. This is how KeepKeep worked before.
+
+**Good to know**
+
+- If a video was only uploaded in 720p, all three give the same file, with no waiting.
+- If anything goes wrong while joining or converting, or your computer can't convert video, KeepKeep never fails the download: it saves the 720p single file instead (the progress balloon then shows "· 720p"), or, if your computer can't convert, the Original file.
+- Very long videos (estimated over 300 MB) are saved as the 720p single file, so your computer doesn't run out of memory.
+- While it works, the balloon shows "Converting 45%" (Best) or "Joining…" (Original).
 
 While downloading, balloons on the right show the overall progress and each photo / video with its thumbnail, size and progress; they disappear a few seconds after it's saved.
 
@@ -49,11 +66,15 @@ While downloading, balloons on the right show the overall progress and each phot
 
 Every video (feed, post page, post popup or Reels) always shows a thin scrubber along its bottom edge (click or drag to any point; hover shows the time there) and a play / pause button next to Instagram's mute button. Instagram's own username, Follow button and caption stay clickable, and the controls hide while something (like a post popup) covers the video. (Not shown in Stories.) While the mouse is over a video, **← / →** skip 5 seconds and **Space** or **K** play / pause; elsewhere those keys keep doing what Instagram uses them for.
 
+### KeepKeep's own page
+
+Everything you saved also has a page of its own in a full browser tab. Open it with the **Open KeepKeep** button in the popup. Profiles and Media show as big grids you can search and filter; select several items to remove, file or download them together, or drag them onto a list in the sidebar. The same page has Settings, Backup (export and import) and About, welcomes you after installing and tells you what's new after an update.
+
 ### After adding
 
 Everything you add is saved right away. The corner card then shows what was added and, below it, your lists as large boxes that slide open. Click boxes (or press **1–9**) to put the item into those lists, or create a new list from the **+ New list** box. With many lists a search field appears and the boxes scroll. The card closes on its own after a few seconds; a bar at the bottom shows the time left, and it pauses while your mouse is over the card.
 
-The basket has two independent sections:
+KeepKeep has two independent sections:
 
 - **Profiles:** accounts you add on purpose (profile link, profile page button, or the Reels **Profile** icon).
 - **Media:** posts, reels and videos. Each item is grouped under its owner with the owner's picture, but adding media **does not** add the owner to Profiles. Use **+ Profile** on a media group to add the owner later if you want.
@@ -66,7 +87,7 @@ Profiles and media each have their own lists (e.g. profile lists "Designers", "F
 
 - Create a list with the **+** button at the right end of the list row.
 - Click a list to show only what's in it; **All** shows everything. With many lists the row scrolls sideways: use the arrow buttons, the mouse wheel or a trackpad.
-- While a list is selected, the bottom bar shows its name with **Rename** and **Delete list**. Deleting asks for confirmation and keeps the list's items in your basket.
+- While a list is selected, the bottom bar shows its name with **Rename** and **Delete list**. Deleting asks for confirmation and keeps the list's items saved.
 - Use the tag button on a profile or media thumbnail to pick its lists.
 - On Instagram, right after adding something, the corner card shows the matching lists so you can file the item immediately.
 
@@ -91,3 +112,7 @@ Everything for publishing – listing texts, privacy answers, screenshots and pr
 ## Roadmap
 
 Planned features are listed in [ROADMAP.md](ROADMAP.md).
+
+## Third-party
+
+[Mediabunny](https://github.com/Vanilagy/mediabunny/tree/v1.61.1) 1.61.1 (MPL-2.0, unmodified) joins and converts videos: `extension/lib/mediabunny.min.mjs`, license in `extension/lib/mediabunny.LICENSE`.
