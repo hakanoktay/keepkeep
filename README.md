@@ -43,7 +43,22 @@ Files go straight to `Downloads/KeepKeep/`, each photo and video as its own file
 
 Photos come in their uploaded size (up to 3072 px, found on the post's embed page) or, if you pick **Standard** in the popup's settings (⚙), in the largest size Instagram shows (up to 1080 px). If the original can't be fetched, the standard size is used.
 
-Videos: Instagram's own single video file stops at about 720p, but it also offers a 1080p version as separate video and audio streams. KeepKeep downloads both and joins them into one MP4 inside the extension. The popup's settings (⚙) and the Settings page have a **Video quality** choice: **Best** (default) converts to H.264 so the file plays everywhere, **Original** keeps Instagram's VP9 video as is (instant and smaller, but some players such as macOS Quick Look can't open it), **Standard** saves the single ~720p file. If anything goes wrong, the single file is saved instead and the progress balloon says so.
+#### Video quality: what you get and why
+
+**Why there's a choice at all.** Instagram keeps two versions of a video. One is a single file that plays everywhere, but it stops at about 720p. The other is the full quality, up to 1080p, but it comes as two separate files, picture and sound, and the picture is in a format called VP9. Your browser joins the two and plays VP9 without a problem, which is why videos look sharp on instagram.com. Once a video is saved to your computer, though, VP9 doesn't open everywhere: on a Mac, QuickTime, Photos and iMovie can't open it, nor can the Photos app on an iPhone, and some editing apps and messaging apps refuse it. Chrome, VLC, Android and most of Windows play it fine.
+
+So KeepKeep always joins the picture and the sound into one MP4 file (instantly, without any loss), and lets you choose the format. In the popup's settings (⚙) or KeepKeep's Settings page, under **Video quality**:
+
+- **Best (recommended)** — up to 1080p, converted to H.264, the format every phone, computer and app opens. It takes a few seconds longer (about 10 seconds for a 45-second reel on a recent Mac; slower on computers without a hardware video encoder, such as many Linux PCs) and the file is larger (about 35 MB for 45 seconds of 1080p). The conversion is done by Chrome on your computer; nothing is uploaded anywhere. The difference from the original is too small to see.
+- **Original** — up to 1080p, exactly as Instagram stores it: instant, smaller, no conversion at all, but in VP9, so it may not open in the apps listed above.
+- **Standard** — Instagram's single file, up to about 720p, the fastest. This is how KeepKeep worked before.
+
+**Good to know**
+
+- If a video was only uploaded in 720p, all three give the same file, with no waiting.
+- If anything goes wrong while joining or converting, or your computer can't convert video, KeepKeep never fails the download: it saves the 720p single file instead (the progress balloon then shows "· 720p"), or, if your computer can't convert, the Original file.
+- Very long videos (estimated over 300 MB) are saved as the 720p single file, so your computer doesn't run out of memory.
+- While it works, the balloon shows "Converting 45%" (Best) or "Joining…" (Original).
 
 While downloading, balloons on the right show the overall progress and each photo / video with its thumbnail, size and progress; they disappear a few seconds after it's saved.
 
