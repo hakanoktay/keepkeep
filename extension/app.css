@@ -408,3 +408,30 @@ main[data-view=welcome], main[data-view=whats-new] { display: grid; place-items:
 .peek-note { margin: 0; color: var(--muted); font-size: 13px; text-align: center; }
 .grid .card.peeking { box-shadow: 0 0 0 2px var(--brand), 0 10px 30px rgba(69, 11, 98, 0.18); }
 body.peek-open #bulk-dock { right: min(440px, 100vw); }
+/* Panel: the post's lists (only its own), "+ Add to list" and its menu */
+.peek-lists-wrap { position: relative; }
+.peek-list.on { padding-right: 4px; cursor: default; }
+.peek-unlist { width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; opacity: 0.6; }
+.peek-unlist:hover { opacity: 1; background: var(--brand-tint); }
+.peek-unlist .i { width: 11px; height: 11px; color: inherit; }
+.peek-add { border-style: dashed; color: var(--muted); }
+.peek-add:hover { color: var(--brand); }
+.peek-picker {
+  position: absolute; z-index: 2; top: calc(100% + 6px); left: 0; width: 280px; max-height: 320px; display: flex; flex-direction: column;
+  background: var(--elevated); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgba(69, 11, 98, 0.2); overflow: hidden;
+  animation: rise 0.16s ease-out;
+}
+.peek-search { margin: 8px; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg, #fff); color: var(--text); font: inherit; font-size: 13px; }
+.peek-search:focus { outline: none; border-color: var(--brand); }
+.peek-options { overflow-y: auto; padding: 0 6px 6px; }
+.peek-option { width: 100%; display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.peek-option:hover, .peek-option:focus-visible { background: var(--brand-tint); }
+.peek-option.create { color: var(--brand); font-weight: 600; }
+.peek-option .i { width: 14px; height: 14px; }
+.peek-empty { margin: 4px 10px 8px; color: var(--muted); font-size: 13px; }
+/* Panel: spinner while Instagram's view loads */
+.peek-body { position: relative; }
+.peek-spinner { position: absolute; inset: 0; display: none; place-items: center; background: var(--elevated); pointer-events: none; }
+.peek-body.loading .peek-spinner { display: grid; }
+.peek-spinner span { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--brand-tint-strong); border-top-color: var(--brand); animation: peek-spin 0.8s linear infinite; }
+@keyframes peek-spin { to { transform: rotate(360deg); } }

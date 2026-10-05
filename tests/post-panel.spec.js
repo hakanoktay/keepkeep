@@ -34,16 +34,36 @@ test('clicking a card opens the post with its details; clicking it again closes'
   await expect(panel).toHaveCount(0);
 });
 
-test('lists: the panel shows only media lists and toggles them', async ({ context, extensionId }) => {
+test('lists: only the post\'s own lists, × removes, + Add to list finds or creates', async ({ context, extensionId }) => {
   const page = await open(context, extensionId);
   await page.click('.card[data-key="m:AAA"] .preview');
-  const lists = page.locator('#peek .peek-list');
-  await expect(lists).toHaveText(['Recipes', 'Travel']);
-  await expect(lists.first()).toHaveClass(/on/);
-  await lists.nth(1).click();
+  await expect(page.locator('#peek .peek-list.on')).toHaveText(['Recipes']); // Travel (not linked) and People (profile list) hidden
+  await page.click('#peek .peek-add');
+  await expect(page.locator('#peek .peek-option')).toHaveText(['Travel']);
+  await page.click('#peek .peek-option:has-text("Travel")');
   await expect.poll(() => stored(page, 'm:AAA').then((r) => r.lists)).toEqual(['l1', 'l2']);
-  await expect(page.locator('#peek .peek-list.on')).toHaveText(['Recipes', 'Travel']); // the panel follows storage
-  await expect(page.locator('#peek .peek-embed')).toHaveCount(1); // the post stays (not re-loaded away)
+  await expect(page.locator('#peek .peek-list.on')).toHaveText(['Recipes', 'Travel']);
+  await expect(page.locator('#peek .peek-picker')).toHaveCount(0);
+  await page.click('#peek .peek-list.on:has-text("Recipes") .peek-unlist');
+  await expect.poll(() => stored(page, 'm:AAA').then((r) => r.lists)).toEqual(['l2']);
+  // Typing a new name creates the list and adds the post to it.
+  await page.click('#peek .peek-add');
+  await page.fill('#peek .peek-search', 'Shoes');
+  await expect(page.locator('#peek .peek-options')).toHaveText('Create "Shoes"'); // nothing else (no stray text)
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#peek .peek-list.on')).toHaveText(['Travel', 'Shoes']);
+  await expect(page.locator('#peek .peek-embed')).toHaveCount(1); // the post stays loaded
+});
+
+test('a spinner shows until the post has loaded', async ({ context, extensionId }) => {
+  let release;
+  const held = new Promise((r) => { release = r; });
+  await context.route(/\/p\/AAA\/embed\/captioned\//, async (route) => { await held; route.fulfill({ contentType: 'text/html', body: '<p>post</p>' }); });
+  const page = await open(context, extensionId);
+  await page.click('.card[data-key="m:AAA"] .preview');
+  await expect(page.locator('#peek .peek-spinner')).toBeVisible();
+  release();
+  await expect(page.locator('#peek .peek-spinner')).toBeHidden();
 });
 
 test('← / → step through the grid; Escape closes without clearing the selection', async ({ context, extensionId }) => {

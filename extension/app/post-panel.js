@@ -18,13 +18,48 @@
     return ts ? `Saved ${new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : '';
   }
 
+  // Only the lists the post is in (× takes it out); "+ Add to list" opens a
+  // small searchable menu of the other media lists, where typing a new name
+  // offers to create that list. A user may have dozens of lists.
+  let pickerOpen = false;
   function lists(m) {
-    const ids = new Set(m.lists || []);
-    return el('div', { class: 'peek-lists' },
-      state.lists.filter((l) => l.kind === 'm').map((l) => el('button', {
-        type: 'button', class: 'peek-list' + (ids.has(l.id) ? ' on' : ''), 'data-id': l.id, 'aria-pressed': String(ids.has(l.id)),
-        onclick: () => KeepKeep.setInList('m:' + m.key, l.id, !ids.has(l.id)),
-      }, ids.has(l.id) ? icon('check') : icon('plus'), el('span', { text: l.name }))));
+    const key = 'm:' + m.key;
+    const mine = new Set(m.lists || []);
+    const all = state.lists.filter((l) => l.kind === 'm');
+    const chips = all.filter((l) => mine.has(l.id)).map((l) => el('span', { class: 'peek-list on', 'data-id': l.id },
+      el('span', { text: l.name }),
+      el('button', { type: 'button', class: 'peek-unlist', title: `Remove from ${l.name}`, 'aria-label': `Remove from ${l.name}`,
+        onclick: () => KeepKeep.setInList(key, l.id, false) }, icon('close'))));
+    const add = el('button', { type: 'button', class: 'peek-list peek-add', 'aria-expanded': String(pickerOpen),
+      onclick: (e) => { e.stopPropagation(); pickerOpen = !pickerOpen; refreshHead(); } }, icon('plus'), el('span', { text: 'Add to list' }));
+    return el('div', { class: 'peek-lists-wrap' },
+      el('div', { class: 'peek-lists' }, chips, add),
+      pickerOpen ? picker(key, all.filter((l) => !mine.has(l.id))) : null);
+  }
+
+  function picker(key, others) {
+    const input = el('input', { type: 'search', class: 'peek-search', placeholder: 'Find or create a list', 'aria-label': 'Find or create a list', maxlength: '40' });
+    const items = el('div', { class: 'peek-options', role: 'listbox' });
+    const choose = async (id) => { pickerOpen = false; await KeepKeep.setInList(key, id, true); };
+    const create = async (name) => { pickerOpen = false; const l = await KeepKeep.createList(name, 'm'); await KeepKeep.setInList(key, l.id, true); };
+    function fill() {
+      const q = input.value.trim().toLowerCase();
+      const shown = others.filter((l) => l.name.toLowerCase().includes(q));
+      const exact = state.lists.some((l) => l.kind === 'm' && l.name.trim().toLowerCase() === q);
+      items.replaceChildren(...[
+        ...shown.map((l) => el('button', { type: 'button', class: 'peek-option', role: 'option', onclick: () => choose(l.id) }, el('span', { text: l.name }))),
+        q && !exact ? el('button', { type: 'button', class: 'peek-option create', onclick: () => create(input.value.trim()) }, icon('plus'), el('span', { text: `Create "${input.value.trim()}"` })) : null,
+        !others.length && !q ? el('p', { class: 'peek-empty', text: 'Type a name to create a list.' }) : null,
+      ].filter(Boolean));
+    }
+    input.addEventListener('input', fill);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); pickerOpen = false; refreshHead(); }
+      else if (e.key === 'Enter') { e.preventDefault(); items.querySelector('.peek-option')?.click(); }
+    });
+    fill();
+    queueMicrotask(() => input.focus());
+    return el('div', { class: 'peek-picker' }, input, items);
   }
 
   function head(m) {
@@ -41,14 +76,24 @@
         el('button', { type: 'button', class: 'peek-btn danger', onclick: () => { close(); saved.removeWithUndo(['m:' + m.key]); } }, icon('trash'), 'Remove')));
   }
 
+  function refreshHead() {
+    const m = panel && media(openKey);
+    if (m) panel.querySelector('.peek-head')?.replaceWith(head(m));
+  }
+
   function body(m) {
     if (isStory(m) || !(m.code || m.key)) {
       return el('div', { class: 'peek-body peek-still' },
         m.thumb ? el('img', { src: m.thumb, alt: '' }) : el('div', { class: 'placeholder', text: 'No preview' }),
         el('p', { class: 'peek-note', text: 'Stories have no preview here. Open it on Instagram to watch it.' }));
     }
-    return el('div', { class: 'peek-body' },
-      el('iframe', { class: 'peek-embed', src: embedUrl(m), title: 'The post on Instagram', loading: 'eager', allowfullscreen: true }));
+    // Instagram's view can take a while on a slow connection: a spinner until it has loaded.
+    const wrap = el('div', { class: 'peek-body loading' },
+      el('div', { class: 'peek-spinner', role: 'status', 'aria-label': 'Loading the post' }, el('span', {})));
+    const frame = el('iframe', { class: 'peek-embed', src: embedUrl(m), title: 'The post on Instagram', loading: 'eager', allowfullscreen: true,
+      onload: () => wrap.classList.remove('loading') });
+    wrap.append(frame);
+    return wrap;
   }
 
   function markCard() {
@@ -66,6 +111,7 @@
       document.body.append(panel);
     }
     openKey = key;
+    pickerOpen = false;
     document.body.classList.add('peek-open');
     panel.replaceChildren(head(m), body(m));
     panel.classList.toggle('entering', first);
@@ -95,6 +141,11 @@
 
   saved.openItem = open;
 
+  // A click elsewhere closes the list menu.
+  document.addEventListener('click', (e) => {
+    if (pickerOpen && !e.target.closest?.('.peek-lists-wrap')) { pickerOpen = false; refreshHead(); }
+  });
+
   // Before the grid's own keys (Escape there clears the selection).
   addEventListener('keydown', (e) => {
     if (!panel || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -112,7 +163,7 @@
     if (!panel) return;
     const m = media(openKey);
     if (!m) return close();
-    panel.querySelector('.peek-head')?.replaceWith(head(m)); // the embed keeps playing
+    refreshHead(); // the embed keeps playing
     markCard();
   });
   // Leaving the grid (Settings, About…) closes it; re-renders keep the mark.
