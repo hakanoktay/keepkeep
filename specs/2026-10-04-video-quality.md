@@ -1,6 +1,6 @@
 # Video quality setting (up to 1080p) — design
 
-Status: proposed (2026-10-04), for 1.1.0.
+Status: approved by the owner (2026-10-05), for 1.1.0. Feasibility checked in the owner's Chrome (see "Measured").
 
 ## Goal
 
@@ -51,6 +51,19 @@ Original instead of Best (conversion would take too long).
 Applies to posts, reels and album videos; stories and highlights too when
 their items carry a manifest.
 
+## Measured (2026-10-05, owner's Chrome 154 on macOS, a 43 s 1080x1920 reel)
+
+- Inputs: VP9 1080x1920 11.9 MB (≈2.2 Mbps) + AAC 0.4 MB, fetched in 0.1–7 s.
+- **Original** (copy into one MP4 with Mediabunny): 0.03 s, 12.3 MB, plays in
+  Chrome; macOS Quick Look can't open it (no thumbnail) — as expected for VP9.
+- **Best** (VP9 → H.264 High, hardware, audio copied): 6.7 s at 2× the source
+  bitrate (24 MB, SSIM 0.972 vs the VP9 source). With the Mac's hardware
+  encoder, 3× gives SSIM 0.980 (36 MB), 4× 0.986 (47 MB). **Chosen: 3× the
+  source video bitrate, clamped to 4–12 Mbps.** macOS Quick Look opens the
+  file (thumbnail made), so QuickTime / Photos / iMovie can.
+- Chrome for Testing (the automated tests' browser) also has VP9 / AAC
+  decoding and H.264 encoding, so Best is tested automatically too.
+
 ## Where it runs
 
 - `instagram.js` `filesOf(item)` keeps today's fields and adds, for videos with
@@ -58,8 +71,10 @@ their items carry a manifest.
 - The content script passes it through the existing `download` message.
 - `offscreen.js` (already fetches every file and reports progress): for a
   file with `dash` and a mode other than Standard, fetches both files, then
-  builds the MP4 with **Mediabunny** and hands the blob to `chrome.downloads`
-  like any other file. On any error it downloads the single `url` instead —
+  builds the MP4 with `video-join.js` (an ES module, loaded on first use with
+  `import()`, wrapping **Mediabunny**) and hands the blob to `chrome.downloads`
+  like any other file. The offscreen document can't read storage, so the
+  content script sends the mode along with the files. On any error it downloads the single `url` instead —
   a download never fails because of this.
 - Progress: the balloon shows "Downloading" (both files' bytes) then
   "Converting 45%" (Best) or "Joining" (Original).
@@ -93,10 +108,9 @@ loaded from the internet; the store's "no remote code" answer stays true.
   fixture files made by ffmpeg (VP9 fragmented MP4 + AAC fragmented MP4,
   2 s), checking the result has two tracks, the right duration and plays
   (a `<video>` element loads it).
-- Best: Chrome for Testing has no H.264 encoder, so the conversion is tested
-  in the owner's real Chrome via the dev window (a 1080p reel: the file
-  is 1080x1920 H.264 + AAC, opens in QuickTime). The automated test checks
-  that Best falls back to Original when the encoder is missing.
+- Best: tested automatically (Chrome for Testing encodes H.264), plus one
+  real 1080p reel in the owner's Chrome via the dev window at the end. A test
+  checks that Best falls back to Original when the encoder is unavailable.
 - Fallback: a test where the DASH fetch fails ends with the single file.
 - Settings UI: the three options in popup and app, stored as `videoQuality`.
 
