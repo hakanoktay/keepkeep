@@ -121,3 +121,23 @@ test('a drag onto a list does not open the panel', async ({ context, extensionId
   await expect.poll(() => stored(page, 'm:BBB').then((r) => r.lists)).toEqual(['l1']);
   await expect(page.locator('#peek')).toHaveCount(0);
 });
+
+test('the large view: ⤢ or F opens the post over the page, ← / → step, Escape and the backdrop go back', async ({ context, extensionId }) => {
+  const page = await open(context, extensionId);
+  await page.click('.card[data-key="m:AAA"] .preview');
+  await page.click('#peek button[aria-label="View large"]');
+  const full = page.locator('#peek-full');
+  await expect(full).toBeVisible();
+  await expect(full.locator('.peek-embed')).toHaveAttribute('src', /\/p\/AAA\/embed\/captioned\/$/);
+  expect(context.pages().filter((p) => p.url().includes('instagram.com'))).toEqual([]); // no new tab
+  await page.keyboard.press('ArrowRight');
+  await expect(full.locator('.peek-embed')).toHaveAttribute('src', /\/p\/BBB\/embed\/captioned\/$/);
+  await page.keyboard.press('Escape');
+  await expect(full).toHaveCount(0);
+  await expect(page.locator('#peek')).toBeVisible(); // back to the panel, not closed
+  await page.keyboard.press('f');
+  await expect(full).toBeVisible();
+  await page.mouse.click(10, 10); // the backdrop
+  await expect(full).toHaveCount(0);
+  await expect(page.locator('#peek .peek-who b')).toHaveText('@bob');
+});

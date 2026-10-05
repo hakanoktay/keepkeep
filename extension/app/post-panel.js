@@ -8,6 +8,7 @@
   const saved = KeepKeepApp.saved;
   let panel = null; // the <aside>, while open
   let openKey = null;
+  let full = null; // the large view over the whole page, while open
 
   const media = (key) => state.media.find((m) => 'm:' + m.key === key);
   const isStory = (m) => String(m.key).startsWith('story:');
@@ -68,6 +69,7 @@
         el('div', { class: 'peek-who' },
           el('b', { text: m.username ? '@' + m.username : 'Owner not found' }),
           el('span', { class: 'peek-date', text: dateText(m.addedAt) })),
+        el('button', { type: 'button', class: 'peek-close', title: 'View large (F)', 'aria-label': 'View large', onclick: () => showFull(true) }, icon('expand')),
         el('button', { type: 'button', class: 'peek-close', title: 'Close (Esc)', 'aria-label': 'Close', onclick: close }, icon('close'))),
       lists(m),
       el('div', { class: 'peek-actions' },
@@ -96,6 +98,20 @@
     return wrap;
   }
 
+  // The large view: the same post over the whole page on a dark backdrop, as
+  // big as the window allows; ← / → keep stepping; Escape, × or a click on
+  // the backdrop return to the panel. No new tab.
+  function showFull(on) {
+    full?.remove();
+    full = null;
+    const m = on && panel && media(openKey);
+    if (!m) return;
+    full = el('div', { id: 'peek-full', role: 'dialog', 'aria-label': 'The post, large', onclick: (e) => { if (e.target === full) showFull(false); } },
+      el('button', { type: 'button', class: 'peek-full-close', title: 'Back (Esc)', 'aria-label': 'Back', onclick: () => showFull(false) }, icon('close')),
+      el('div', { class: 'peek-full-stage' }, body(m)));
+    document.body.append(full);
+  }
+
   function markCard() {
     for (const c of document.querySelectorAll('.card.peeking')) c.classList.remove('peeking');
     if (openKey) document.querySelector(`.card[data-key="${CSS.escape(openKey)}"]`)?.classList.add('peeking');
@@ -114,11 +130,13 @@
     pickerOpen = false;
     document.body.classList.add('peek-open');
     panel.replaceChildren(head(m), body(m));
+    if (full) showFull(true); // stepping with ← / → in the large view
     panel.classList.toggle('entering', first);
     markCard();
   }
 
   function close() {
+    showFull(false);
     if (!panel) return;
     const p = panel;
     panel = null;
@@ -150,7 +168,8 @@
   addEventListener('keydown', (e) => {
     if (!panel || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') { if (full) showFull(false); else close(); }
+    else if (e.key === 'f' || e.key === 'F') showFull(!full);
     else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') step(1);
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') step(-1);
     else return;

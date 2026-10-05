@@ -435,3 +435,24 @@ body.peek-open #bulk-dock { right: min(440px, 100vw); }
 .peek-body.loading .peek-spinner { display: grid; }
 .peek-spinner span { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--brand-tint-strong); border-top-color: var(--brand); animation: peek-spin 0.8s linear infinite; }
 @keyframes peek-spin { to { transform: rotate(360deg); } }
+/* Panel: the large view (⤢ / F) — the post over the whole page */
+#peek-full {
+  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center;
+  background: rgba(12, 5, 18, 0.88); backdrop-filter: blur(6px); animation: peek-fade 0.2s ease-out both;
+}
+@keyframes peek-fade { from { opacity: 0; } }
+.peek-full-stage {
+  /* As tall as the window allows; the width follows a portrait post with its header and caption. */
+  height: calc(100vh - 48px); width: min(calc(100vw - 120px), max(540px, calc((100vh - 200px) * 0.8)));
+  border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); animation: peek-zoom 0.24s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+@keyframes peek-zoom { from { transform: scale(0.96); opacity: 0; } }
+.peek-full-stage .peek-body { height: 100%; }
+.peek-full-stage.peek-still, .peek-full-stage .peek-still { background: #000; justify-content: center; height: 100%; }
+.peek-full-stage .peek-still img { max-height: calc(100vh - 120px); }
+.peek-full-close {
+  position: fixed; top: 18px; right: 22px; width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12); color: #fff; cursor: pointer;
+}
+.peek-full-close:hover { background: rgba(255, 255, 255, 0.22); }
+.peek-full-close .i { width: 20px; height: 20px; }
