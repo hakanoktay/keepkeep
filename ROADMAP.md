@@ -89,7 +89,7 @@ Final wording is the owner's choice. Keep it safe: "Instagram" only as "for Inst
 
 ### Already under way
 
-- **Video "Original" quality** – Instagram serves videos as a single file only up to ~720p; the 1080p version comes as separate video and audio streams (DASH). Download both and join them into one standard MP4 inside the extension; fall back to the single file if anything fails.
+- ~~**Video quality up to 1080p**~~ – **done in v1.1.0**: Instagram's single video file stops at ~720p; the 1080p version is DASH (separate VP9 video and AAC audio). A **Video quality** setting (popup and app Settings, also in backups): **Best** (default) joins them and converts to H.264 so the file plays everywhere (Quick Look, QuickTime, Windows); **Original** joins them without converting (VP9, instant, smaller, but some players can't open it); **Standard** is the single ~720p file. Any failure falls back to the single file and says so ("· 720p"). Design: `specs/2026-10-04-video-quality.md`.
 - ~~**Highlights**~~ – **done in v1.1.0**: the story pill on highlights (Profile, Media saves the story as a "Highlight", Download / D saves the whole highlight), the anonymous gate answered there too.
 - **Kept story copies** – stories disappear after 24 hours, so a story added to Media keeps its own copy in the extension (only on this computer). Media shows "Story · 18h left", later "Kept copy"; an expired story opens in KeepKeep's own viewer with a Download button. Settings show how much space the copies use, with "Delete copies".
 - **One Quality setting** – Original / Standard for photos, videos and stories alike.

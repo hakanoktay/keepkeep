@@ -37,13 +37,15 @@ There is no build step; `extension/` is loaded unpacked as is.
 | `extension/stories-main.js` | MAIN world, `document_start`: wraps fetch/XHR and answers the "story seen" request locally when anonymous mode is on |
 | `extension/veil.js`, `veil.css` | Anonymous-mode theme ("the veil"): purple tint via Instagram's CSS variables, story rings (89px canvases tinted with a filter), mask badges, capsule, reply/reaction warnings, the "will be able to see" gate answer |
 | `extension/basket.js` | Storage of saved profiles / media / lists |
-| `extension/instagram.js` | Instagram data: `mediaFiles(code, {originals})`, `embedOriginals`, `story(pk)`, `storyReel(pk)`, `filesOf`, `fileKey` |
+| `extension/instagram.js` | Instagram data: `mediaFiles(code, {originals})`, `embedOriginals`, `story(pk)`, `storyReel(pk)`, `filesOf`, `fileKey`, `dashOf(item)` (1080p DASH info: `dash = {video, audio|null, duration, fallbackHeight}`, only when larger than the largest `video_versions` entry; `filesOf` adds it to video files) |
 | `extension/panel.js` | In-page "add to list" card |
-| `extension/content.js` | `download(code)`, `downloadStory(pk)`, `pageInfo` |
+| `extension/content.js` | `download(code)`, `downloadStory(pk)`, `pageInfo`; normalises `videoQuality` (missing/other → `best`) and sends `mode` + `dash` |
+| `extension/video-join.js` | ES module, `import()`ed by the offscreen document: `joinDash({video, audio, mode, duration, onProgress, canEncode, signal})` → `{bytes, mode}`. Best = H.264 at 3× source bitrate clamped 4–12 Mbps (hardware encoder, then software, else Original); > 600 s → Original; unusable audio → throws; Original retry if the Best video track is refused |
+| `extension/lib/` | `mediabunny.min.mjs` = Mediabunny 1.61.1 (MPL-2.0, unmodified), `mediabunny.LICENSE`, `README.md` (source: https://github.com/Vanilagy/mediabunny). Keep the license file when updating |
 | `extension/buttons.js` | Profile / Media / Download buttons on posts, reels, profiles; the story hover pill; D key |
 | `extension/video.js` | Scrubber and play/pause for every video |
-| `extension/background.js` | Service worker: downloads, anonymous toolbar icon (`icons/anon*.png`) |
-| `extension/offscreen.js` | Fetches files (rejects non image/video responses, fallback URL), progress, one blob per file |
+| `extension/background.js` | Service worker: downloads (keeps `dash` only if its URLs pass `ALLOWED_HOSTS`), anonymous toolbar icon (`icons/anon*.png`) |
+| `extension/offscreen.js` | Fetches files (rejects non image/video/audio responses, fallback URL), progress, one blob per file (made as soon as it's built). DASH path when mode ≠ standard: sums both files' progress, phases `convert` / `join`, 60 s no-progress watchdog (`JOIN_STALL_MS`) aborts the join; any failure → single file (`url`, then `fallback`), balloon shows "· 720p" |
 | `extension/app.html`, `app.css` | KeepKeep's own full tab (opened by the popup's "Open KeepKeep" button). Shell with sidebar (Profiles and Media, the lists section under them, Settings and About at the bottom); the CSS is the same family as the store images (Inter in `fonts/`, lilac) |
 | `extension/app/core.js` | App shell and router: `KeepKeepApp.view(name, fn)` registers a view, `go(hash)` navigates, `state`, `on` / `emit` (events), `el` (DOM helper), `icon` |
 | `extension/app/saved.js` | Profiles / Media grids: search, filters, live updates from storage, chunked rendering, selection, bulk actions (remove, add to list, download), undo. `KeepKeepApp.saved` = `{selected, filters, rerender(reset)}`: `rerender()` when data changed, `rerender(true)` when filters changed |
@@ -92,8 +94,14 @@ There is no build step; `extension/` is loaded unpacked as is.
   `aria-current="step"`.
 - **Theme:** CSS variables (`--accent`, `--blue-5`, `--ig-primary-button`, …)
   and `__fb-light-mode` / `__fb-dark-mode` classes.
-- **Videos:** a single progressive file only up to ~720p; 1080p is DASH
-  (separate video + audio).
+- **Videos (verified 2026-10-05):** `video_versions` top out at 720p even for
+  1080x1920 uploads. 1080p is only in `video_dash_manifest`: Representations
+  are VP9 video and AAC audio, `BaseURL` is an absolute URL, and `mimeType`
+  may sit on the `AdaptationSet` instead of the Representation; the audio may
+  be served as `audio/mp4`. Measured on a 43 s 1080x1920 reel: Best (H.264
+  High ~6.7 Mbps + HE-AAC) took 13.9 s end to end and gave 36 MB that macOS
+  Quick Look opens; Original (VP9) is instant, 12 MB, and Quick Look can't
+  open it. Hence Best is the default.
 
 ## Hard-won fixes (don't regress)
 
@@ -118,6 +126,8 @@ the headless shell can't load extensions). `tests/fixtures.js` loads
 with `tests/pages/<name>.html`; CDN requests get 404 unless a test routes
 them. Add a test for every fix, so it stays fixed. First-time setup:
 `cd tests && npm install && npx playwright install chromium`.
+
+Video tests (`dash`, `video-join`, `video-settings`, `video-download` specs) use fixtures in `tests/fixtures/media` (`make.sh` regenerates them). Playwright routes don't reach the offscreen document's requests, so `video-download.spec.js` answers them through CDP `Target.sendMessageToTarget` (non-flat sessions, deprecated: if Chromium drops it, those tests fail loudly).
 
 Real Instagram: `./scripts/dev-chrome.sh` opens a separate Chrome profile
 (`~/.keepkeep-dev-chrome`, the owner signed in there) with only the unpacked
@@ -186,5 +196,4 @@ earlier test scripts lived in a session scratchpad and are not in the repo.
   rewriting the store purpose first. Free core + PRO (Insights, influencer
   shortlist) is the likely money model; selling PRO means switching the
   publisher account to "trader".
-- Not started (waiting for the owner): kept story copies, video Original via
-  DASH merge, highlights, one Quality setting — see `ROADMAP.md`.
+- Not started (waiting for the owner): kept story copies, one Quality setting for photos, videos and stories alike — see `ROADMAP.md`.

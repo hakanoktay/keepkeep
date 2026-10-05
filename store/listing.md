@@ -57,6 +57,7 @@ KEEP PROFILES AND POSTS
 
 DOWNLOAD IN FULL QUALITY
 • Every photo and video of a post – the whole album – with one click.
+• Videos up to 1080p, in a file that plays everywhere.
 • Photos in the size they were uploaded, or Instagram's standard size if you prefer smaller files.
 • All of an account's current stories at once.
 • Files are saved to Downloads/KeepKeep and named after the account and the date, so they sort nicely. Progress bubbles show every file.

@@ -4,6 +4,7 @@
 const WHATS_NEW = {
   '1.1.0': [
     'KeepKeep now has its own page: everything you saved, in a big grid with search, filters and bulk actions.',
+    'Videos now download in up to 1080p.',
     'Reorder your lists by dragging them.',
     'Back up everything to one file and import it on another computer.',
     'Never asks for your password. Nothing leaves your computer.',

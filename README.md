@@ -43,6 +43,8 @@ Files go straight to `Downloads/KeepKeep/`, each photo and video as its own file
 
 Photos come in their uploaded size (up to 3072 px, found on the post's embed page) or, if you pick **Standard** in the popup's settings (⚙), in the largest size Instagram shows (up to 1080 px). If the original can't be fetched, the standard size is used.
 
+Videos: Instagram's own single video file stops at about 720p, but it also offers a 1080p version as separate video and audio streams. KeepKeep downloads both and joins them into one MP4 inside the extension. The popup's settings (⚙) and the Settings page have a **Video quality** choice: **Best** (default) converts to H.264 so the file plays everywhere, **Original** keeps Instagram's VP9 video as is (instant and smaller, but some players such as macOS Quick Look can't open it), **Standard** saves the single ~720p file. If anything goes wrong, the single file is saved instead and the progress balloon says so.
+
 While downloading, balloons on the right show the overall progress and each photo / video with its thumbnail, size and progress; they disappear a few seconds after it's saved.
 
 ### Video controls
@@ -95,3 +97,7 @@ Everything for publishing – listing texts, privacy answers, screenshots and pr
 ## Roadmap
 
 Planned features are listed in [ROADMAP.md](ROADMAP.md).
+
+## Third-party
+
+[Mediabunny](https://github.com/Vanilagy/mediabunny) 1.61.1 (MPL-2.0, unmodified) joins and converts videos: `extension/lib/mediabunny.min.mjs`, license in `extension/lib/mediabunny.LICENSE`.
