@@ -466,9 +466,14 @@ body.peek-open #bulk-dock { right: min(440px, 100vw); }
 .peek-full-stage .peek-body { height: 100%; }
 .peek-full-stage.peek-still, .peek-full-stage .peek-still { background: #000; justify-content: center; height: 100%; }
 .peek-full-stage .peek-still img { max-height: calc(100vh - 120px); }
-.peek-full-close {
-  position: fixed; top: 18px; right: 22px; width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 50%;
+.peek-full-tools { position: fixed; top: 18px; right: 22px; display: flex; gap: 10px; }
+.peek-full-btn {
+  width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 50%;
   background: rgba(255, 255, 255, 0.12); color: #fff; cursor: pointer;
 }
-.peek-full-close:hover { background: rgba(255, 255, 255, 0.22); }
-.peek-full-close .i { width: 20px; height: 20px; }
+.peek-full-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.peek-full-btn .i { width: 20px; height: 20px; }
+/* The download notice must show above the large view. */
+body:has(#peek-full) #notice { z-index: 90; top: 74px; right: 22px; }
+/* With the panel open, the notice sits left of it, not under it. */
+body.peek-open #notice { right: calc(min(440px, 100vw) + 24px); }

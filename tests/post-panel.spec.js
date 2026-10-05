@@ -141,3 +141,13 @@ test('the large view: ⤢ or F opens the post over the page, ← / → step, Esc
   await expect(full).toHaveCount(0);
   await expect(page.locator('#peek .peek-who b')).toHaveText('@bob');
 });
+
+test('the large view has a Download button, like the panel', async ({ context, extensionId }) => {
+  const page = await open(context, extensionId);
+  await page.click('.card[data-key="m:AAA"] .preview');
+  await page.keyboard.press('f');
+  await page.click('#peek-full button[aria-label="Download"]');
+  await expect(page.locator('#notice')).toContainText('Open Instagram in a tab to download');
+  await expect(page.locator('#notice')).toBeVisible();
+  await expect(page.locator('#peek-full')).toBeVisible(); // stays in the large view
+});

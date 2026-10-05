@@ -108,7 +108,9 @@
     const m = on && panel && media(openKey);
     if (!m) return;
     full = el('div', { id: 'peek-full', role: 'dialog', 'aria-label': 'The post, large', onclick: (e) => { if (e.target === full) showFull(false); } },
-      el('button', { type: 'button', class: 'peek-full-close', title: 'Back (Esc)', 'aria-label': 'Back', onclick: () => showFull(false) }, icon('close')),
+      el('div', { class: 'peek-full-tools' },
+        el('button', { type: 'button', class: 'peek-full-btn', title: 'Download', 'aria-label': 'Download', onclick: () => saved.bulkDownload?.([openKey]) }, icon('download')),
+        el('button', { type: 'button', class: 'peek-full-btn', title: 'Back (Esc)', 'aria-label': 'Back', onclick: () => showFull(false) }, icon('close'))),
       el('div', { class: 'peek-full-stage' }, body(m)));
     document.body.append(full);
   }
