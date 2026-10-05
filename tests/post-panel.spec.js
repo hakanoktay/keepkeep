@@ -20,7 +20,7 @@ async function open(context, extensionId) {
 }
 const stored = (page, k) => page.evaluate(async (k) => (await chrome.storage.local.get(k))[k], k);
 
-test('clicking a card opens the post with its details; clicking it again closes', async ({ context, extensionId }) => {
+test('clicking a card opens the post with its details; a click on the dimmed page or × closes', async ({ context, extensionId }) => {
   const page = await open(context, extensionId);
   await page.click('.card[data-key="m:AAA"] .preview');
   const panel = page.locator('#peek');
@@ -30,7 +30,13 @@ test('clicking a card opens the post with its details; clicking it again closes'
   await expect(panel.locator('a.peek-btn')).toHaveAttribute('href', 'https://www.instagram.com/p/AAA/');
   await expect(page.locator('.card[data-key="m:AAA"]')).toHaveClass(/peeking/);
   expect(context.pages().filter((p) => p.url().includes('instagram.com/p/AAA'))).toEqual([]); // no new tab
+  // The page behind dims; a click on it closes the panel (× still does too).
+  await expect(page.locator('#peek-scrim')).toBeVisible();
+  await page.mouse.click(400, 500);
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator('#peek-scrim')).toHaveCount(0);
   await page.click('.card[data-key="m:AAA"] .preview');
+  await page.click('#peek button[aria-label="Close"]');
   await expect(panel).toHaveCount(0);
 });
 

@@ -7,6 +7,7 @@
   const { el, icon, on, state } = KeepKeepApp;
   const saved = KeepKeepApp.saved;
   let panel = null; // the <aside>, while open
+  let scrim = null; // the dimmed page behind it: a click there closes the panel
   let openKey = null;
   let full = null; // the large view over the whole page, while open
 
@@ -126,8 +127,9 @@
     if (!m) return;
     const first = !panel;
     if (first) {
+      scrim = el('div', { id: 'peek-scrim', onclick: close });
       panel = el('aside', { id: 'peek', 'aria-label': 'Post' });
-      document.body.append(panel);
+      document.body.append(scrim, panel);
     }
     openKey = key;
     pickerOpen = false;
@@ -141,8 +143,11 @@
   function close() {
     showFull(false);
     if (!panel) return;
-    const p = panel;
+    const p = panel, sc = scrim;
     panel = null;
+    scrim = null;
+    sc?.classList.add('leaving');
+    setTimeout(() => sc?.remove(), 220);
     openKey = null;
     document.body.classList.remove('peek-open');
     markCard();

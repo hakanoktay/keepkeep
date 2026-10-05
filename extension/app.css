@@ -477,3 +477,7 @@ body.peek-open #bulk-dock { right: min(440px, 100vw); }
 body:has(#peek-full) #notice { z-index: 90; top: 74px; right: 22px; }
 /* With the panel open, the notice sits left of it, not under it. */
 body.peek-open #notice { right: calc(min(440px, 100vw) + 24px); }
+/* Behind the panel: the page dims a little; a click there closes the panel. */
+#peek-scrim { position: fixed; inset: 0; z-index: 59; background: rgba(12, 5, 18, 0.28); cursor: pointer; animation: peek-fade 0.24s ease-out both; }
+#peek-scrim.leaving { pointer-events: none; animation: peek-unfade 0.22s ease-in both; }
+@keyframes peek-unfade { to { opacity: 0; } }
