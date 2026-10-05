@@ -256,6 +256,17 @@ test('a manifest with nothing bigger than 720p: no DASH request, the single file
   expect(r.shown.at(-1)).toBe(kb(PROG));
 });
 
+for (const quality of ['original', 'best']) {
+  test(`a long video (3600 s at 2.4 Mbps, ${quality}): over 300 MB, so no DASH request, the single file`, async ({ context, extensionId }) => {
+    const r = await download(context, extensionId, { item: { ...video(MPD_1080), video_duration: 3600 }, quality });
+    expect(r.files).toHaveLength(1);
+    expect(r.files[0].equals(PROG)).toBe(true);
+    expect(r.requested).toMatchObject({ 'p.mp4': 1 });
+    expect(r.requested['v1080.mp4']).toBeUndefined();
+    expect(r.requested['a.mp4']).toBeUndefined();
+  });
+}
+
 test('the background keeps DASH files only from Instagram\'s CDN', async ({ context, extensionId }) => {
   const { ext, urls } = await openCdn(context, extensionId);
   const res = await ext.evaluate((V) => chrome.runtime.sendMessage({ type: 'download', job: 'j1', mode: 'original', files: [

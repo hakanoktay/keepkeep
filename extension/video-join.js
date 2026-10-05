@@ -4,8 +4,9 @@
 // - 'original': both tracks copied as they are (fast; VP9 plays in Chrome and
 //   VLC, but may not open in QuickTime, Photos or iMovie).
 // - 'best': the video converted to H.264 so the file opens everywhere, the
-//   audio copied. Falls back to 'original' for long videos or when the
-//   browser can't encode H.264 at this size.
+//   audio copied. Falls back to 'original' (a copy) for long videos, for a
+//   video that is H.264 already, or when the browser can't encode H.264 at
+//   this size.
 // Throws when the video or a given audio file can't be used; the caller then
 // saves Instagram's single file instead (it has sound).
 import * as mb from './lib/mediabunny.min.mjs';
@@ -27,6 +28,7 @@ async function bestVideo(input, size, duration, canEncode) {
   if (!(seconds > 0) || seconds > BEST_MAX_SECONDS) return null;
   const track = await input.getPrimaryVideoTrack();
   if (!track) return null;
+  if (await track.getCodec() === 'avc') return null; // already H.264: copying it is faster and lossless
   const bitrate = Math.round(Math.min(BITRATE_MAX, Math.max(BITRATE_MIN, 3 * size * 8 / seconds)));
   const config = { codec: 'avc', width: await track.getDisplayWidth(), height: await track.getDisplayHeight(), bitrate };
   for (const hardwareAcceleration of ACCELERATIONS) {
@@ -42,8 +44,10 @@ async function bestVideo(input, size, duration, canEncode) {
 // video, audio: Uint8Array (audio may be null: a video without sound).
 // signal (optional AbortSignal): aborting it stops the work at once, wherever
 // it is, and rejects with the signal's reason (the caller's watchdog).
+// onMode (optional): called with the mode that will actually be used ('best'
+// can quietly become 'original') before the work starts.
 // Returns { bytes, mode } with the mode actually used.
-export async function joinDash({ video, audio, mode, duration, onProgress, canEncode = encoderFor, signal }) {
+export async function joinDash({ video, audio, mode, duration, onProgress, onMode, canEncode = encoderFor, signal }) {
   signal?.throwIfAborted();
   const target = new mb.BufferTarget();
   const output = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: 'in-memory' }), target });
@@ -72,7 +76,7 @@ export async function joinDash({ video, audio, mode, duration, onProgress, canEn
     const ownAudio = audio ? { discard: true } : {};
     let videoConv = await convert(videoIn, { video: best || {}, audio: ownAudio });
     // The encoder turned it down after all: copy it instead (nothing was added to the output yet).
-    if (best && !videoConv.utilizedTracks.length) {
+    if (best && !uses(videoConv, 'video')) {
       best = null;
       videoConv = await convert(videoIn, { video: {}, audio: ownAudio });
     }
@@ -84,6 +88,7 @@ export async function joinDash({ video, audio, mode, duration, onProgress, canEn
       audioConv = await convert(audioIn, { video: { discard: true } });
       if (!uses(audioConv, 'audio')) throw new Error('no usable audio track');
     }
+    onMode?.(best ? 'best' : 'original');
     if (onProgress) {
       videoConv.onProgress = (p) => {
         if (!signal?.aborted) onProgress(p);

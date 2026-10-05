@@ -100,4 +100,4 @@ Planned features are listed in [ROADMAP.md](ROADMAP.md).
 
 ## Third-party
 
-[Mediabunny](https://github.com/Vanilagy/mediabunny) 1.61.1 (MPL-2.0, unmodified) joins and converts videos: `extension/lib/mediabunny.min.mjs`, license in `extension/lib/mediabunny.LICENSE`.
+[Mediabunny](https://github.com/Vanilagy/mediabunny/tree/v1.61.1) 1.61.1 (MPL-2.0, unmodified) joins and converts videos: `extension/lib/mediabunny.min.mjs`, license in `extension/lib/mediabunny.LICENSE`.

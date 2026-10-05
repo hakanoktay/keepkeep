@@ -5,7 +5,7 @@ const fs = require('fs'); const path = require('path');
 const { test, expect } = require('./fixtures');
 const media = (name) => [...fs.readFileSync(path.join(__dirname, 'fixtures', 'media', name))];
 const VP9 = media('v-vp9.mp4'); const AAC = media('a-aac.mp4'); const ALAC = media('a-alac.mp4');
-const VP9_8192 = media('v-vp9-8192.mp4');
+const VP9_8192 = media('v-vp9-8192.mp4'); const H264 = media('prog-720.mp4');
 const UNREADABLE = /unsupported or unrecognizable format/;
 const NO_H264 = 'this browser cannot encode H.264 (WebCodecs), so Best cannot be tested here';
 
@@ -38,7 +38,7 @@ async function join(context, extensionId, opts) {
   return page.evaluate(async (o) => {
     const { joinDash } = await import('/video-join.js');
     const mb = await import('/lib/mediabunny.min.mjs'); // the same module instance video-join.js uses
-    const progress = []; const asked = []; const cancelled = new Set(); const created = [];
+    const progress = []; const modes = []; const asked = []; const cancelled = new Set(); const created = [];
     const cancel = mb.Conversion.prototype.cancel;
     mb.Conversion.prototype.cancel = function () { cancelled.add(this); return cancel.call(this); };
     const init = mb.Conversion.init;
@@ -51,6 +51,7 @@ async function join(context, extensionId, opts) {
       r = await joinDash({
         video: new Uint8Array(o.video), audio: o.audio ? new Uint8Array(o.audio) : null,
         mode: o.mode, duration: o.duration ?? null, signal: o.abort ? controller.signal : undefined,
+        onMode: (m) => modes.push(m),
         onProgress: (p) => {
           if (o.progressThrows) throw new Error('progress failed');
           if (o.abort === 'progress' && p > 0) stall();
@@ -70,7 +71,7 @@ async function join(context, extensionId, opts) {
     }
     const input = new mb.Input({ source: new mb.BufferSource(r.bytes), formats: mb.ALL_FORMATS });
     const codecs = (tracks) => Promise.all(tracks.map((t) => t.getCodec()));
-    const out = { mode: r.mode, isBytes: r.bytes instanceof Uint8Array, progress, asked,
+    const out = { mode: r.mode, modes, isBytes: r.bytes instanceof Uint8Array, progress, asked,
       video: await codecs(await input.getVideoTracks()), audio: await codecs(await input.getAudioTracks()),
       duration: await input.computeDuration() };
     input.dispose();
@@ -183,4 +184,25 @@ test('an aborted signal (the watchdog in offscreen.js) rejects and stops every c
   expect(during).toMatchObject({ error: 'stalled', created: 2, running: [] });
   expect(during.cancelled).toBeGreaterThan(0);
   expect(during.progress.length).toBeGreaterThan(0);
+});
+
+test('best on a video that is H.264 already copies it (nothing asked of the encoder)', async ({ context, extensionId }) => {
+  const r = await join(context, extensionId, { video: H264, audio: AAC, mode: 'best', duration: 2, encoder: true });
+  expect(r).toMatchObject({ mode: 'original', video: ['avc'], audio: ['aac'], asked: [] });
+});
+
+test('onMode tells the mode actually used, before the work starts', async ({ context, extensionId }) => {
+  const orig = await join(context, extensionId, { video: VP9, audio: AAC, mode: 'original', duration: 2 });
+  expect(orig.modes).toEqual(['original']);
+  // Best that quietly became Original: no encoder, then one the encoder refuses after all.
+  const none = await join(context, extensionId, { video: VP9, audio: AAC, mode: 'best', duration: 2, encoder: false });
+  expect(none.modes).toEqual(['original']);
+  const refused = await join(context, extensionId, { video: VP9_8192, audio: AAC, mode: 'best', duration: 2, encoder: true });
+  expect(refused.modes).toEqual(['original']);
+});
+
+test('onMode says best when the video is converted', async ({ context, extensionId }) => {
+  test.skip(!await encodesH264(context, extensionId), NO_H264);
+  const r = await join(context, extensionId, { video: VP9, audio: AAC, mode: 'best', duration: 2 });
+  expect(r.modes).toEqual(['best']);
 });

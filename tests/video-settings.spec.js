@@ -2,7 +2,7 @@
 const { test, expect } = require('./fixtures');
 
 const OPTIONS = [
-  ['best', 'Best', 'Up to 1080p, plays everywhere. Takes a few seconds longer.'],
+  ['best', 'Best (recommended)', 'Up to 1080p, plays everywhere. Takes a few seconds longer.'],
   ['original', 'Original', 'Up to 1080p, exactly as Instagram stores it. Fastest, but may not open in QuickTime, Photos or iMovie.'],
   ['standard', 'Standard', 'Up to 720p, a single file, fastest. The size Instagram plays on the web.'],
 ];

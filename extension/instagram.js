@@ -129,10 +129,6 @@ var InstaApi = (() => {
     }
   }
 
-  // Every photo / video of a post (all items of an album), each in the highest
-  // resolution Instagram offers (photos in their uploaded size unless
-  // `originals` is false), plus the owner and publish time for file names.
-  // Each photo / video of an API item (all items of an album), in the largest listed size.
   // The video's DASH manifest: its largest video and best audio, when that
   // video is bigger than the largest single file (those stop at 720p).
   // `fallbackHeight` is that single file's size in the "720p" sense (its
@@ -161,6 +157,8 @@ var InstaApi = (() => {
       const video = videos.reduce((a, b) => (area(b) > area(a) || (area(b) === area(a) && b.bandwidth > a.bandwidth) ? b : a));
       const single = (m.video_versions || []).reduce((a, b) => (area(b) > area(a) ? b : a), {});
       if (area(video) <= area(single)) return null;
+      // A video with sound but no audio file in the manifest: the single file has the sound, a join wouldn't.
+      if (!audios.length && m.has_audio === true) return null;
       const audio = audios.length ? audios.reduce((a, b) => (b.bandwidth > a.bandwidth ? b : a)) : null;
       return {
         video, audio, duration: typeof m.video_duration === 'number' ? m.video_duration : null,
@@ -171,6 +169,7 @@ var InstaApi = (() => {
     }
   }
 
+  // Each photo / video of an API item (all items of an album), in the largest listed size.
   function filesOf(item) {
     const parts = item.carousel_media?.length ? item.carousel_media : [item];
     const largest = (list) => list.reduce((a, b) => ((b.width || 0) * (b.height || 0) > (a.width || 0) * (a.height || 0) ? b : a));
@@ -237,6 +236,9 @@ var InstaApi = (() => {
     };
   }
 
+  // Every photo / video of a post (all items of an album), each in the highest
+  // resolution Instagram offers (photos in their uploaded size unless
+  // `originals` is false), plus the owner and publish time for file names.
   async function mediaFiles(code, { originals: wantOriginals = true } = {}) {
     const { items } = await json(`/api/v1/media/${codeToId(code)}/info/`);
     const item = items[0];

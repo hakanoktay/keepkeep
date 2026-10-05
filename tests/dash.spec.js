@@ -50,3 +50,17 @@ test('fallbackHeight: the largest single file in the "720p" sense (its shorter s
   // Sizes not given: nothing to show.
   expect((await files(context, extensionId, item(big, [[0, 0]])))[0].dash.fallbackHeight).toBeNull();
 });
+test('mimeType only on the AdaptationSets (as on the real site)', async ({ context, extensionId }) => {
+  const bare = (w, h, bw, codecs, url) => `<Representation ${w ? `width="${w}" height="${h}"` : ''} bandwidth="${bw}" codecs="${codecs}"><BaseURL>${url}</BaseURL></Representation>`;
+  const manifest = `<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period>`
+    + `<AdaptationSet mimeType="video/mp4">${bare(720, 1280, 1500000, 'vp09.00.31.08', V + 'v720.mp4')}${bare(1080, 1920, 2400000, 'vp09.00.40.08', V + 'v1080.mp4')}</AdaptationSet>`
+    + `<AdaptationSet mimeType="audio/mp4">${bare(0, 0, 66000, 'mp4a.40.5', V + 'a.mp4')}</AdaptationSet></Period></MPD>`;
+  const [f] = await files(context, extensionId, item(manifest));
+  expect(f.dash.video.url).toBe(V + 'v1080.mp4');
+  expect(f.dash.audio.url).toBe(V + 'a.mp4');
+});
+test('no audio Representation but the item has sound: no dash (the single file has it)', async ({ context, extensionId }) => {
+  const m = mpd(rep('video/mp4', 1080, 1920, 2400000, 'vp09.00.40.08', V + 'v1080.mp4'));
+  expect((await files(context, extensionId, { ...item(m), has_audio: true }))[0].dash).toBeUndefined();
+  expect((await files(context, extensionId, { ...item(m), has_audio: false }))[0].dash.audio).toBeNull();
+});

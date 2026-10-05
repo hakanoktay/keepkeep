@@ -78,7 +78,7 @@
           option('photo-size', 'photoSize', 'original', 'Original', 'The photo as it was uploaded, up to 3072 px wide. Sharpest, larger files (often 1–3 MB).'),
           option('photo-size', 'photoSize', 'standard', 'Standard', 'The largest size Instagram shows, up to 1080 px wide. Smaller files (a few hundred KB).')),
         el('section', {}, el('h2', { text: 'Video quality' }),
-          option('video-quality', 'videoQuality', 'best', 'Best', 'Up to 1080p, plays everywhere. Takes a few seconds longer.'),
+          option('video-quality', 'videoQuality', 'best', 'Best (recommended)', 'Up to 1080p, plays everywhere. Takes a few seconds longer.'),
           option('video-quality', 'videoQuality', 'original', 'Original', 'Up to 1080p, exactly as Instagram stores it. Fastest, but may not open in QuickTime, Photos or iMovie.'),
           option('video-quality', 'videoQuality', 'standard', 'Standard', 'Up to 720p, a single file, fastest. The size Instagram plays on the web.')),
         el('section', {}, el('h2', { text: 'Stories' }),
