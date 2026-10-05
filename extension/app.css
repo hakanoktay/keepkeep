@@ -380,9 +380,25 @@ main[data-view=welcome], main[data-view=whats-new] { display: grid; place-items:
 .peek-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .peek-who b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .peek-date { color: var(--muted); font-size: 13px; }
-.peek-close { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
-.peek-close:hover { background: var(--brand-tint); color: var(--text); }
-.peek-close .i { width: 18px; height: 18px; }
+/* macOS-style segmented buttons: one rounded control, hairline border, soft
+   top-lit fill, a divider between the two. */
+.peek-tools {
+  flex: none; display: flex; border-radius: 8px; overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.14); box-shadow: 0 1px 1.5px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  background: linear-gradient(#fdfcfe, #f1eef4);
+}
+.peek-close { width: 34px; height: 28px; display: grid; place-items: center; border: 0; background: none; color: #4a4250; cursor: pointer; }
+.peek-close + .peek-close { border-left: 1px solid rgba(0, 0, 0, 0.1); }
+.peek-close:hover { background: rgba(0, 0, 0, 0.045); color: #000; }
+.peek-close:active { background: rgba(0, 0, 0, 0.1); }
+.peek-close .i { width: 15px; height: 15px; }
+@media (prefers-color-scheme: dark) {
+  .peek-tools { border-color: rgba(255, 255, 255, 0.14); box-shadow: 0 1px 1.5px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08); background: linear-gradient(#4a4450, #3c3742); }
+  .peek-close { color: #e6e0ea; }
+  .peek-close + .peek-close { border-left-color: rgba(255, 255, 255, 0.1); }
+  .peek-close:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+  .peek-close:active { background: rgba(255, 255, 255, 0.14); }
+}
 .peek-lists { display: flex; flex-wrap: wrap; gap: 6px; }
 .peek-list {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px 0 8px; border-radius: 999px; cursor: pointer;
