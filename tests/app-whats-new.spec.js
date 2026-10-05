@@ -30,7 +30,7 @@ test('the view lists the notes', async ({ context, extensionId }) => {
   await page.goto(`chrome-extension://${extensionId}/app.html#whats-new`);
   await expect(page.locator('.whats-new li').first()).toBeVisible();
   await expect(page.locator('.whats-new h1')).toContainText("What's new in KeepKeep 1.1.0");
-  await expect(page.locator('.whats-new li')).toHaveCount(4);
+  await expect(page.locator('.whats-new li')).toHaveCount(5);
   await expect(page.locator('.sidebar')).toBeHidden();
   await page.click('.whats-new a.go');
   await expect(page).toHaveURL(/#media$/);
