@@ -133,12 +133,48 @@ var InstaApi = (() => {
   // resolution Instagram offers (photos in their uploaded size unless
   // `originals` is false), plus the owner and publish time for file names.
   // Each photo / video of an API item (all items of an album), in the largest listed size.
+  // The video's DASH manifest: its largest video and best audio, when that
+  // video is bigger than the largest single file (those stop at 720p).
+  // Returns null when there is no usable manifest.
+  function dashOf(m) {
+    try {
+      if (typeof m.video_dash_manifest !== 'string') return null;
+      const doc = new DOMParser().parseFromString(m.video_dash_manifest, 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) return null;
+      const videos = [];
+      const audios = [];
+      for (const r of doc.getElementsByTagName('Representation')) {
+        const mime = r.getAttribute('mimeType') || r.parentElement?.getAttribute('mimeType') || '';
+        const base = r.getElementsByTagName('BaseURL')[0]?.textContent.trim();
+        let u;
+        try { u = new URL(base); } catch { continue; }
+        if (u.protocol !== 'https:' || !/(^|\.)(cdninstagram\.com|fbcdn\.net)$/.test(u.hostname)) continue;
+        const bandwidth = Number(r.getAttribute('bandwidth')) || 0;
+        const codec = r.getAttribute('codecs') || '';
+        if (mime.startsWith('video/')) videos.push({ url: base, width: Number(r.getAttribute('width')) || 0, height: Number(r.getAttribute('height')) || 0, codec, bandwidth });
+        else if (mime.startsWith('audio/')) audios.push({ url: base, codec, bandwidth });
+      }
+      if (!videos.length) return null;
+      const area = (v) => (v.width || 0) * (v.height || 0);
+      const video = videos.reduce((a, b) => (area(b) > area(a) || (area(b) === area(a) && b.bandwidth > a.bandwidth) ? b : a));
+      const single = (m.video_versions || []).reduce((n, v) => Math.max(n, area(v)), 0);
+      if (area(video) <= single) return null;
+      const audio = audios.length ? audios.reduce((a, b) => (b.bandwidth > a.bandwidth ? b : a)) : null;
+      return { video, audio, duration: typeof m.video_duration === 'number' ? m.video_duration : null };
+    } catch {
+      return null;
+    }
+  }
+
   function filesOf(item) {
     const parts = item.carousel_media?.length ? item.carousel_media : [item];
     const largest = (list) => list.reduce((a, b) => ((b.width || 0) * (b.height || 0) > (a.width || 0) * (a.height || 0) ? b : a));
     return parts.map((m) => {
       const thumb = pick(m.image_versions2?.candidates, 150); // small preview (a video's cover)
-      if (m.video_versions?.length) return { url: largest(m.video_versions).url, kind: 'video', thumb };
+      if (m.video_versions?.length) {
+        const dash = dashOf(m);
+        return { url: largest(m.video_versions).url, kind: 'video', thumb, ...(dash && { dash }) };
+      }
       if (m.image_versions2?.candidates?.length) return { url: largest(m.image_versions2.candidates).url, kind: 'image', thumb };
       return null;
     }).filter(Boolean);
@@ -217,5 +253,5 @@ var InstaApi = (() => {
     };
   }
 
-  return { profile, media, mediaFiles, story, storyReel, highlight, thumbnail, codeToId, fileKey };
+  return { profile, media, mediaFiles, filesOf, dashOf, story, storyReel, highlight, thumbnail, codeToId, fileKey };
 })();
