@@ -668,23 +668,28 @@ var KeepKeepPanel = (() => {
       });
     },
 
-    progress(job, index, loaded, total, done) {
+    // `phase` while a video's DASH files are put into one MP4 after they were
+    // fetched: 'convert' (Best) or 'join' (Original), `fraction` 0–1.
+    progress(job, index, loaded, total, done, phase, fraction) {
       const j = dlJobs.get(job);
       const it = j?.items[index];
       if (!it || it.done) return;
       Object.assign(it, { loaded, total: total || it.total });
-      const f = it.total ? loaded / it.total : 0;
-      it.el.querySelector('.bar').style.width = `${Math.round(f * 100)}%`;
+      it.f = phase ? Math.min(1, Math.max(0, fraction || 0)) : it.total ? loaded / it.total : 0;
+      it.el.querySelector('.bar').style.width = `${Math.round(it.f * 100)}%`;
       if (done) {
         it.done = true;
         setText(it.el, null, size(loaded));
         markDone(it.el);
+      } else if (phase) {
+        setText(it.el, null, phase === 'convert' ? `Converting ${Math.round(it.f * 100)}%` : 'Joining…');
+        it.el.querySelector('.pct').textContent = '';
       } else {
         setText(it.el, null, it.total ? `${size(loaded)} of ${size(it.total)}` : size(loaded));
-        it.el.querySelector('.pct').textContent = it.total ? `${Math.round(f * 100)}%` : '';
+        it.el.querySelector('.pct').textContent = it.total ? `${Math.round(it.f * 100)}%` : '';
       }
       // Overall progress on the header balloon.
-      const all = j.items.reduce((s, x) => s + (x.done ? 1 : x.total ? x.loaded / x.total : 0), 0) / j.items.length;
+      const all = j.items.reduce((s, x) => s + (x.done ? 1 : x.f || 0), 0) / j.items.length;
       j.header.querySelector('.bar').style.width = `${Math.round(all * 100)}%`;
     },
 

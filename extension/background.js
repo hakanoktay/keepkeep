@@ -29,7 +29,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 const jobs = new Map(); // job id → tab id, for progress messages
 
-async function startDownload({ job, files }, tabId) {
+async function startDownload({ job, mode, files }, tabId) {
   const allowed = (url) => {
     try {
       const u = new URL(url);
@@ -38,14 +38,17 @@ async function startDownload({ job, files }, tabId) {
       return false;
     }
   };
+  // A video's DASH files (up to 1080p) only from Instagram's CDN too; the audio may be missing.
+  const dashOk = (d) => d && allowed(d.video?.url) && (d.audio == null || allowed(d.audio.url));
   files = (files || []).filter(({ url }) => allowed(url)).map((f) => ({
     url: f.url, fallback: allowed(f.fallback) ? f.fallback : null, filename: safeName(f.filename),
+    ...(dashOk(f.dash) && { dash: f.dash }),
   }));
   if (!files.length) throw new Error('no files');
   jobs.set(job, tabId);
   try {
     await ensureHelper();
-    const built = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'build', job, files });
+    const built = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'build', job, mode, files });
     if (!built || built.error) throw new Error(built?.error || 'build failed');
     for (const { url, filename } of built.outputs) {
       const id = await chrome.downloads.download({

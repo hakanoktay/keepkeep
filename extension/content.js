@@ -144,7 +144,9 @@ var KeepKeepDrop = (() => {
 
   // Download progress, relayed by the background script.
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type === 'dl-progress') KeepKeepPanel.downloads.progress(msg.job, msg.index, msg.loaded, msg.total, msg.done);
+    if (msg?.type === 'dl-progress') {
+      KeepKeepPanel.downloads.progress(msg.job, msg.index, msg.loaded, msg.total, msg.done, msg.phase, msg.fraction);
+    }
   });
 
   // The popup's Profile / Media / Download icons act on what's open in this tab.
@@ -220,14 +222,14 @@ var KeepKeepDrop = (() => {
     const ui = KeepKeepPanel.downloads;
     ui.start(job);
     try {
-      const { photoSize } = await chrome.storage.local.get('photoSize');
+      const { photoSize, videoQuality } = await chrome.storage.local.get(['photoSize', 'videoQuality']);
       const post = await InstaApi.mediaFiles(code, { originals: photoSize !== 'standard' });
       if (!post.files.length) throw new Error('no files');
       const stamp = compactTime(post.takenAt ? post.takenAt * 1000 : Date.now());
       const base = `${post.username || 'instagram'}_${stamp}`;
       const many = post.files.length > 1;
       let files = post.files.map((f, i) => ({
-        url: f.url, fallback: f.fallback, kind: f.kind, thumb: f.thumb,
+        url: f.url, fallback: f.fallback, dash: f.dash, kind: f.kind, thumb: f.thumb,
         filename: `${base}${many ? `_${i + 1}` : ''}.${extension(f)}`,
       }));
       if (only) {
@@ -238,8 +240,8 @@ var KeepKeepDrop = (() => {
       }
       ui.items(job, { username: post.username, files });
       const res = await chrome.runtime.sendMessage({
-        type: 'download', job,
-        files: files.map(({ url, fallback, filename }) => ({ url, fallback, filename })),
+        type: 'download', job, mode: videoMode(videoQuality),
+        files: files.map(({ url, fallback, dash, filename }) => ({ url, fallback, dash, filename })),
       });
       if (!res?.ok) throw new Error(res?.error || 'failed');
       ui.finish(job, res);
@@ -271,6 +273,7 @@ var KeepKeepDrop = (() => {
     ui.start(job);
     try {
       const reel = await load();
+      const { videoQuality } = await chrome.storage.local.get('videoQuality');
       const user = reel.username || 'instagram';
       const files = [];
       const used = new Set();
@@ -279,12 +282,15 @@ var KeepKeepDrop = (() => {
           let name = `${user}_${compactTime(it.takenAt ? it.takenAt * 1000 : Date.now())}_${suffix}`;
           for (let n = 2; used.has(name); n++) name = name.replace(/(_\d+)?$/, '') + '_' + n; // same minute
           used.add(name);
-          files.push({ url: f.url, kind: f.kind, thumb: f.thumb, filename: `${name}.${extension(f)}` });
+          files.push({ url: f.url, dash: f.dash, kind: f.kind, thumb: f.thumb, filename: `${name}.${extension(f)}` });
         }
       }
       if (!files.length) throw new Error('no files');
       ui.items(job, { username: reel.username, files });
-      const res = await chrome.runtime.sendMessage({ type: 'download', job, files: files.map(({ url, filename }) => ({ url, filename })) });
+      const res = await chrome.runtime.sendMessage({
+        type: 'download', job, mode: videoMode(videoQuality),
+        files: files.map(({ url, dash, filename }) => ({ url, dash, filename })),
+      });
       if (!res?.ok) throw new Error(res?.error || 'failed');
       ui.finish(job, res);
       return true;
@@ -292,6 +298,13 @@ var KeepKeepDrop = (() => {
       ui.fail(job, failText);
       return false;
     }
+  }
+
+  // The Video quality setting: 'original' or 'standard' as stored, anything
+  // else (nothing stored, an unknown value) 'best'. Videos with Instagram's
+  // DASH files come up to 1080p in Best / Original; Standard is the single file.
+  function videoMode(stored) {
+    return stored === 'original' || stored === 'standard' ? stored : 'best';
   }
 
   // 2025-07-27 14:32 → "2507271432" (local time)
