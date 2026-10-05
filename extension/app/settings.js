@@ -19,15 +19,16 @@
 
   // ---- Settings ----
   async function syncSettings() {
-    const { photoSize, anonStories } = await chrome.storage.local.get(['photoSize', 'anonStories']);
+    const { photoSize, videoQuality, anonStories } = await chrome.storage.local.get(['photoSize', 'videoQuality', 'anonStories']);
     for (const input of document.querySelectorAll('input[name=photo-size]')) input.checked = input.value === (photoSize === 'standard' ? 'standard' : 'original');
+    for (const input of document.querySelectorAll('input[name=video-quality]')) input.checked = input.value === (videoQuality === 'original' || videoQuality === 'standard' ? videoQuality : 'best');
     const anon = document.getElementById('anon-stories');
     if (anon) anon.checked = anonStories === true;
   }
 
-  function option(value, title, desc) {
+  function option(name, key, value, title, desc) {
     return el('label', { class: 'setting-option' },
-      el('input', { type: 'radio', name: 'photo-size', value, onchange: () => chrome.storage.local.set({ photoSize: value }) }),
+      el('input', { type: 'radio', name, value, onchange: () => chrome.storage.local.set({ [key]: value }) }),
       el('span', { class: 'text' }, el('b', { text: title }), el('span', { class: 'desc', text: desc })));
   }
 
@@ -74,8 +75,12 @@
         el('section', {}, el('h2', { text: 'Downloads' }),
           el('p', { class: 'hint', text: 'Photos and videos are saved to Downloads/KeepKeep, each as its own file.' })),
         el('section', {}, el('h2', { text: 'Photo size' }),
-          option('original', 'Original', 'The photo as it was uploaded, up to 3072 px wide. Sharpest, larger files (often 1–3 MB).'),
-          option('standard', 'Standard', 'The largest size Instagram shows, up to 1080 px wide. Smaller files (a few hundred KB).')),
+          option('photo-size', 'photoSize', 'original', 'Original', 'The photo as it was uploaded, up to 3072 px wide. Sharpest, larger files (often 1–3 MB).'),
+          option('photo-size', 'photoSize', 'standard', 'Standard', 'The largest size Instagram shows, up to 1080 px wide. Smaller files (a few hundred KB).')),
+        el('section', {}, el('h2', { text: 'Video quality' }),
+          option('video-quality', 'videoQuality', 'best', 'Best', 'Up to 1080p, plays everywhere. Takes a few seconds longer.'),
+          option('video-quality', 'videoQuality', 'original', 'Original', 'Up to 1080p, exactly as Instagram stores it. Fastest, but may not open in QuickTime, Photos or iMovie.'),
+          option('video-quality', 'videoQuality', 'standard', 'Standard', 'Up to 720p, a single file, fastest. The size Instagram plays on the web.')),
         el('section', {}, el('h2', { text: 'Stories' }),
           el('label', { class: 'setting-toggle' },
             el('span', { class: 'text' }, el('b', { text: 'Watch stories anonymously' }),

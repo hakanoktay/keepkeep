@@ -121,7 +121,7 @@ var KeepKeep = (() => {
 
   const BACKUP = 'keepkeep-backup';
   const BACKUP_VERSION = 1;
-  const SETTINGS = ['photoSize', 'anonStories'];
+  const SETTINGS = ['photoSize', 'videoQuality', 'anonStories'];
 
   async function exportData() {
     const all = await chrome.storage.local.get(null);

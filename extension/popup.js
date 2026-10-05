@@ -454,10 +454,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 async function renderSettings() {
-  const { photoSize, anonStories } = await chrome.storage.local.get(['photoSize', 'anonStories']);
+  const { photoSize, videoQuality, anonStories } = await chrome.storage.local.get(['photoSize', 'videoQuality', 'anonStories']);
   $('#anon-stories').checked = anonStories === true;
   for (const input of document.querySelectorAll('input[name=photo-size]')) {
     input.checked = input.value === (photoSize === 'standard' ? 'standard' : 'original');
+  }
+  for (const input of document.querySelectorAll('input[name=video-quality]')) {
+    input.checked = input.value === (videoQuality === 'original' || videoQuality === 'standard' ? videoQuality : 'best');
   }
   $('.about .version').textContent = 'v' + chrome.runtime.getManifest().version;
 }
@@ -481,6 +484,9 @@ chrome.storage.onChanged.addListener((changes) => changes.anonStories && renderA
 renderAnon();
 for (const input of document.querySelectorAll('input[name=photo-size]')) {
   input.addEventListener('change', () => chrome.storage.local.set({ photoSize: input.value }));
+}
+for (const input of document.querySelectorAll('input[name=video-quality]')) {
+  input.addEventListener('change', () => chrome.storage.local.set({ videoQuality: input.value }));
 }
 loadPage();
 
