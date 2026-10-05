@@ -23,7 +23,7 @@ test('a 1080p manifest adds dash with the largest video and the audio', async ({
     rep('audio/mp4', 0, 0, 66000, 'mp4a.40.5', V + 'a.mp4'))));
   expect(f.url).toBe(V + 'p0.mp4');
   expect(f.dash).toEqual({ video: { url: V + 'v1080.mp4', width: 1080, height: 1920, codec: 'vp09.00.40.08', bandwidth: 2400000 },
-    audio: { url: V + 'a.mp4', codec: 'mp4a.40.5', bandwidth: 66000 }, duration: 43 });
+    audio: { url: V + 'a.mp4', codec: 'mp4a.40.5', bandwidth: 66000 }, duration: 43, fallbackHeight: 720 });
 });
 test('720p-only manifest: no dash', async ({ context, extensionId }) => {
   const [f] = await files(context, extensionId, item(mpd(rep('video/mp4', 720, 1280, 1500000, 'vp09.00.31.08', V + 'v720.mp4'), rep('audio/mp4', 0, 0, 66000, 'mp4a.40.5', V + 'a.mp4'))));
@@ -42,4 +42,11 @@ test('photos and album items are unchanged', async ({ context, extensionId }) =>
   const album = { media_type: 8, carousel_media: [{ media_type: 1, image_versions2: { candidates: [{ url: V + 'i.jpg', width: 1080, height: 1080 }] } }] };
   const [f] = await files(context, extensionId, album);
   expect(f).toEqual({ url: V + 'i.jpg', kind: 'image', thumb: V + 'i.jpg' });
+});
+test('fallbackHeight: the largest single file in the "720p" sense (its shorter side)', async ({ context, extensionId }) => {
+  const big = mpd(rep('video/mp4', 1920, 1080, 2400000, 'vp09.00.40.08', V + 'v1080.mp4'));
+  expect((await files(context, extensionId, item(big, [[640, 360], [1280, 720]])))[0].dash.fallbackHeight).toBe(720);
+  expect((await files(context, extensionId, item(big, [[480, 270]])))[0].dash.fallbackHeight).toBe(270);
+  // Sizes not given: nothing to show.
+  expect((await files(context, extensionId, item(big, [[0, 0]])))[0].dash.fallbackHeight).toBeNull();
 });

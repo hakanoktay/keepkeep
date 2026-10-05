@@ -40,18 +40,31 @@ async function bestVideo(input, size, duration, canEncode) {
 }
 
 // video, audio: Uint8Array (audio may be null: a video without sound).
+// signal (optional AbortSignal): aborting it stops the work at once, wherever
+// it is, and rejects with the signal's reason (the caller's watchdog).
 // Returns { bytes, mode } with the mode actually used.
-export async function joinDash({ video, audio, mode, duration, onProgress, canEncode = encoderFor }) {
+export async function joinDash({ video, audio, mode, duration, onProgress, canEncode = encoderFor, signal }) {
+  signal?.throwIfAborted();
   const target = new mb.BufferTarget();
   const output = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: 'in-memory' }), target });
   const inputs = [];
   const conversions = [];
+  // Stops whatever still runs (decoders / encoders) and drops the output.
+  const stop = async () => {
+    const running = conversions.filter((c) => c.state === 'idle' || c.state === 'executing');
+    await Promise.all(running.map((c) => c.cancel().catch(() => {})));
+    await output.cancel().catch(() => {});
+  };
   const convert = async (input, options) => {
     const conversion = await mb.Conversion.init({ input, output, composable: true, showWarnings: false, ...options });
     conversions.push(conversion);
+    if (signal?.aborted) { // aborted while this one was set up
+      await conversion.cancel().catch(() => {});
+      throw signal.reason;
+    }
     return conversion;
   };
-  try {
+  const work = async () => {
     const videoIn = open(video);
     inputs.push(videoIn);
     let best = mode === 'best' ? await bestVideo(videoIn, video.length, duration, canEncode) : null;
@@ -71,19 +84,34 @@ export async function joinDash({ video, audio, mode, duration, onProgress, canEn
       audioConv = await convert(audioIn, { video: { discard: true } });
       if (!uses(audioConv, 'audio')) throw new Error('no usable audio track');
     }
-    if (onProgress) videoConv.onProgress = (p) => onProgress(p);
+    if (onProgress) {
+      videoConv.onProgress = (p) => {
+        if (!signal?.aborted) onProgress(p);
+      };
+    }
     await output.start();
     await Promise.all([videoConv.execute(), audioConv?.execute()]);
+    signal?.throwIfAborted();
     await output.finalize();
     return { bytes: new Uint8Array(target.buffer), mode: best ? 'best' : 'original' };
+  };
+  // An abort rejects at once and stops the work without waiting for it (a
+  // stuck encoder might never return).
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => {
+      reject(signal.reason);
+      stop();
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([work(), aborted]);
   } catch (e) {
-    // Stop whatever still runs (decoders / encoders) before dropping the output.
-    for (const conversion of conversions) {
-      if (conversion.state === 'idle' || conversion.state === 'executing') await conversion.cancel().catch(() => {});
-    }
-    await output.cancel().catch(() => {});
+    if (!signal?.aborted) await stop(); // (an abort already stopped it)
     throw e;
   } finally {
+    signal?.removeEventListener('abort', onAbort);
     for (const input of inputs) input.dispose();
   }
 }

@@ -29,28 +29,44 @@ async function encodesH264(context, extensionId) {
 // 'throws' / { [hardwareAcceleration]: answer }) replaces canEncode with a stub
 // that records what it was asked; `progressThrows` makes onProgress throw;
 // `cancelled` counts the conversions that were cancelled (on failure).
+// `abort` passes a signal that is aborted 'before' the call, during the
+// encoder check ('setup', with `encoder`) or at the first progress past 0
+// ('progress'); `running` then lists the states of the conversions still
+// idle or executing a moment after joinDash rejected.
 async function join(context, extensionId, opts) {
   const page = await extensionPage(context, extensionId);
   return page.evaluate(async (o) => {
     const { joinDash } = await import('/video-join.js');
     const mb = await import('/lib/mediabunny.min.mjs'); // the same module instance video-join.js uses
-    const progress = []; const asked = []; const cancelled = new Set();
+    const progress = []; const asked = []; const cancelled = new Set(); const created = [];
     const cancel = mb.Conversion.prototype.cancel;
     mb.Conversion.prototype.cancel = function () { cancelled.add(this); return cancel.call(this); };
+    const init = mb.Conversion.init;
+    mb.Conversion.init = async function (...args) { const c = await init.apply(this, args); created.push(c); return c; };
+    const controller = new AbortController();
+    const stall = () => controller.abort(new Error('stalled'));
+    if (o.abort === 'before') stall();
     let r;
     try {
       r = await joinDash({
         video: new Uint8Array(o.video), audio: o.audio ? new Uint8Array(o.audio) : null,
-        mode: o.mode, duration: o.duration ?? null,
-        onProgress: (p) => { if (o.progressThrows) throw new Error('progress failed'); progress.push(p); },
+        mode: o.mode, duration: o.duration ?? null, signal: o.abort ? controller.signal : undefined,
+        onProgress: (p) => {
+          if (o.progressThrows) throw new Error('progress failed');
+          if (o.abort === 'progress' && p > 0) stall();
+          progress.push(p);
+        },
         canEncode: 'encoder' in o ? async (config) => {
           asked.push(config);
+          if (o.abort === 'setup') stall();
           if (o.encoder === 'throws') throw new Error('encoder check failed');
           return typeof o.encoder === 'object' ? o.encoder[config.hardwareAcceleration] : o.encoder;
         } : undefined,
       });
     } catch (e) {
-      return { error: String(e && e.message || e), asked, cancelled: cancelled.size };
+      await new Promise((resolve) => setTimeout(resolve, 500)); // let anything left over wind down
+      const running = created.map((c) => c.state).filter((state) => state === 'idle' || state === 'executing');
+      return { error: String(e && e.message || e), asked, cancelled: cancelled.size, created: created.length, running, progress };
     }
     const input = new mb.Input({ source: new mb.BufferSource(r.bytes), formats: mb.ALL_FORMATS });
     const codecs = (tracks) => Promise.all(tracks.map((t) => t.getCodec()));
@@ -153,4 +169,18 @@ test('a failure while joining cancels both conversions', async ({ context, exten
   const r = await join(context, extensionId, { video: VP9, audio: AAC, mode: 'original', duration: 2, progressThrows: true });
   expect(r.error).toBe('progress failed');
   expect(r.cancelled).toBe(2); // the failing video conversion and the audio one
+});
+
+test('an aborted signal (the watchdog in offscreen.js) rejects and stops every conversion', async ({ context, extensionId }) => {
+  // Already aborted: nothing is started.
+  const before = await join(context, extensionId, { video: VP9, audio: AAC, mode: 'original', duration: 2, abort: 'before' });
+  expect(before).toMatchObject({ error: 'stalled', created: 0, running: [] });
+  // Aborted while the encoder is being checked: the conversion set up next is stopped too.
+  const setup = await join(context, extensionId, { video: VP9, audio: AAC, mode: 'best', duration: 2, encoder: true, abort: 'setup' });
+  expect(setup).toMatchObject({ error: 'stalled', running: [] });
+  // Aborted while joining.
+  const during = await join(context, extensionId, { video: VP9, audio: AAC, mode: 'original', duration: 2, abort: 'progress' });
+  expect(during).toMatchObject({ error: 'stalled', created: 2, running: [] });
+  expect(during.cancelled).toBeGreaterThan(0);
+  expect(during.progress.length).toBeGreaterThan(0);
 });

@@ -145,7 +145,8 @@ var KeepKeepDrop = (() => {
   // Download progress, relayed by the background script.
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type === 'dl-progress') {
-      KeepKeepPanel.downloads.progress(msg.job, msg.index, msg.loaded, msg.total, msg.done, msg.phase, msg.fraction);
+      const { job, index, loaded, total, done, phase, fraction, fallbackHeight } = msg;
+      KeepKeepPanel.downloads.progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight });
     }
   });
 

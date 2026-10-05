@@ -670,7 +670,9 @@ var KeepKeepPanel = (() => {
 
     // `phase` while a video's DASH files are put into one MP4 after they were
     // fetched: 'convert' (Best) or 'join' (Original), `fraction` 0–1.
-    progress(job, index, loaded, total, done, phase, fraction) {
+    // `fallbackHeight` (e.g. 720) when the video's single file was saved
+    // instead of its DASH files: shown quietly after the size.
+    progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight } = {}) {
       const j = dlJobs.get(job);
       const it = j?.items[index];
       if (!it || it.done) return;
@@ -679,7 +681,7 @@ var KeepKeepPanel = (() => {
       it.el.querySelector('.bar').style.width = `${Math.round(it.f * 100)}%`;
       if (done) {
         it.done = true;
-        setText(it.el, null, size(loaded));
+        setText(it.el, null, fallbackHeight ? `${size(loaded)} · ${fallbackHeight}p` : size(loaded));
         markDone(it.el);
       } else if (phase) {
         setText(it.el, null, phase === 'convert' ? `Converting ${Math.round(it.f * 100)}%` : 'Joining…');
@@ -688,9 +690,11 @@ var KeepKeepPanel = (() => {
         setText(it.el, null, it.total ? `${size(loaded)} of ${size(it.total)}` : size(loaded));
         it.el.querySelector('.pct').textContent = it.total ? `${Math.round(it.f * 100)}%` : '';
       }
-      // Overall progress on the header balloon.
+      // Overall progress on the header balloon. It never steps back, though an
+      // item's bar starts again when its video is converted or joined.
       const all = j.items.reduce((s, x) => s + (x.done ? 1 : x.f || 0), 0) / j.items.length;
-      j.header.querySelector('.bar').style.width = `${Math.round(all * 100)}%`;
+      j.peak = Math.max(j.peak || 0, all);
+      j.header.querySelector('.bar').style.width = `${Math.round(j.peak * 100)}%`;
     },
 
     finish(job, res) {

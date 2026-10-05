@@ -135,6 +135,8 @@ var InstaApi = (() => {
   // Each photo / video of an API item (all items of an album), in the largest listed size.
   // The video's DASH manifest: its largest video and best audio, when that
   // video is bigger than the largest single file (those stop at 720p).
+  // `fallbackHeight` is that single file's size in the "720p" sense (its
+  // shorter side: 720 for a 720x1280 reel), shown when it is saved instead.
   // Returns null when there is no usable manifest.
   function dashOf(m) {
     try {
@@ -157,10 +159,13 @@ var InstaApi = (() => {
       if (!videos.length) return null;
       const area = (v) => (v.width || 0) * (v.height || 0);
       const video = videos.reduce((a, b) => (area(b) > area(a) || (area(b) === area(a) && b.bandwidth > a.bandwidth) ? b : a));
-      const single = (m.video_versions || []).reduce((n, v) => Math.max(n, area(v)), 0);
-      if (area(video) <= single) return null;
+      const single = (m.video_versions || []).reduce((a, b) => (area(b) > area(a) ? b : a), {});
+      if (area(video) <= area(single)) return null;
       const audio = audios.length ? audios.reduce((a, b) => (b.bandwidth > a.bandwidth ? b : a)) : null;
-      return { video, audio, duration: typeof m.video_duration === 'number' ? m.video_duration : null };
+      return {
+        video, audio, duration: typeof m.video_duration === 'number' ? m.video_duration : null,
+        fallbackHeight: Math.min(single.width || 0, single.height || 0) || null,
+      };
     } catch {
       return null;
     }
