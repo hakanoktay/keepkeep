@@ -583,11 +583,14 @@ var KeepKeepPanel = (() => {
     .job {
       position: relative; flex: none; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
       pointer-events: auto; animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: opacity 0.15s;
-      /* Animated rows inside can escape overflow:hidden's rounded corners in Chrome; clip-path doesn't let them. */
-      clip-path: inset(0 round 14px); isolation: isolate;
     }
     .job.leaving { animation: slide-out 0.3s ease-in both; }
     .job > .bubble.header { box-shadow: none; border-radius: 0; animation: none; background: none; }
+    /* Animated rows can escape overflow:hidden's rounded corners in Chrome; clip-path on
+       the inner parts doesn't let them (and keeps the card's own shadow). */
+    .job > .bubble.header { clip-path: inset(0 round 14px 14px 0 0); }
+    .job > .bubble.header:last-child { clip-path: inset(0 round 14px); }
+    .job > .listbox { clip-path: inset(0 round 0 0 14px 14px); }
     .job > .listbox { margin: 0; box-shadow: none; border-radius: 0; animation: none; border-top: 1px solid var(--secondary); }
     .job > .listbox.collapsed { margin: 0; border-top-color: transparent; }
     /* A post's files in one white box with a shadow: at most about four rows
