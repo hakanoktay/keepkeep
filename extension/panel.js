@@ -583,6 +583,8 @@ var KeepKeepPanel = (() => {
     .job {
       position: relative; flex: none; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
       pointer-events: auto; animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: opacity 0.15s;
+      /* Animated rows inside can escape overflow:hidden's rounded corners in Chrome; clip-path doesn't let them. */
+      clip-path: inset(0 round 14px); isolation: isolate;
     }
     .job.leaving { animation: slide-out 0.3s ease-in both; }
     .job > .bubble.header { box-shadow: none; border-radius: 0; animation: none; background: none; }
