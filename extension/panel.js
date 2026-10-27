@@ -579,19 +579,33 @@ var KeepKeepPanel = (() => {
       animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     }
     .bubble.item { margin-left: 24px; padding: 8px 10px; }
-    /* A post's files: at most about four balloons tall, the rest scroll inside,
-       so a 20-photo album never covers the page (or the buttons under it). */
-    .items {
-      flex: none; display: flex; flex-direction: column; gap: 8px; max-height: 254px; overflow-y: auto; overscroll-behavior: contain;
-      scrollbar-width: none; pointer-events: auto; padding: 4px 12px 14px; margin: -4px -12px -14px; /* room for the balloons' shadows */
+    /* A post's files in one white box with a shadow: at most about four rows
+       tall, the rest scroll inside, so a 20-photo album never covers the page. */
+    .listbox {
+      flex: none; margin-left: 24px; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
+      pointer-events: auto; animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s, margin 0.3s;
     }
+    .listbox.collapsed { grid-template-rows: 0fr; opacity: 0; margin-top: -8px; pointer-events: none; }
+    .items { min-height: 0; max-height: 240px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
     .items::-webkit-scrollbar { display: none; }
-    .items.more { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+    .items.more { mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); }
     .items.more.end { mask-image: none; }
-    .items.leaving { animation: slide-out 0.3s ease-in both; }
+    .items .bubble.item { margin: 0; box-shadow: none; border-radius: 10px; animation-name: row-in; }
+    .items .bubble.item:hover { background: var(--secondary); }
+    @keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+    /* The minimise button on the header balloon */
+    .min {
+      flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 7px; padding: 0;
+      background: var(--secondary); color: var(--muted); cursor: pointer; pointer-events: auto; transition: background 0.15s, color 0.15s;
+    }
+    .min:hover { color: var(--text); filter: brightness(0.95); }
+    .min svg { width: 14px; height: 14px; transition: transform 0.25s; }
+    .header.collapsed .min svg { transform: rotate(180deg); }
+    .listbox.leaving { animation: slide-out 0.3s ease-in both; }
     /* The pointer is over a button under the balloons: they fade and let the click through. */
-    .stack.through .bubble, .stack.through .items { opacity: 0.22; pointer-events: none; }
-    .bubble, .items { transition: opacity 0.15s; }
+    .stack.through .bubble, .stack.through .listbox, .stack.through .min { opacity: 0.22; pointer-events: none; }
+    .bubble { transition: opacity 0.15s; }
     .bubble.leaving { animation: slide-out 0.3s ease-in both; }
     @keyframes slide-in { from { opacity: 0; transform: translateX(40px); } }
     @keyframes slide-out { to { opacity: 0; transform: translateX(40px); } }
@@ -672,11 +686,20 @@ var KeepKeepPanel = (() => {
       const n = files.length;
       setText(j.header, `Downloading ${n === 1 ? (files[0].kind === 'video' ? 'video' : 'photo') : `${n} files`}`,
         username ? '@' + username : '');
+      j.box = el('div', 'listbox');
       j.list = el('div', 'items');
+      j.box.append(j.list);
       j.list.addEventListener('scroll', () => edge(j.list), { passive: true });
       j.list.addEventListener('pointerenter', () => { j.hovered = true; });
       j.list.addEventListener('pointerleave', () => { j.hovered = false; });
-      j.header.after(j.list);
+      j.header.after(j.box);
+      j.username = username;
+      if (n > 1) {
+        const min = el('button', 'min', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>');
+        min.title = 'Hide the files (the download goes on)';
+        min.addEventListener('click', (e) => { e.stopPropagation(); collapse(j, !j.collapsed); });
+        j.header.querySelector('.state').before(min);
+      }
       files.forEach((f, i) => {
         const b = bubble('item', f.thumb, f.filename, 'Waiting…', 60 * Math.min(i + 1, 5));
         if (!f.thumb) b.querySelector('.thumb').innerHTML = DL_ICONS[f.kind] || DL_ICONS.image;
@@ -685,6 +708,9 @@ var KeepKeepPanel = (() => {
         j.items.push({ el: b, loaded: 0, total: 0, done: false });
       });
       edge(j.list);
+      // When there are more files than fit, the list flows down once and back,
+      // so it's clear there's more than what shows (macOS hides scrollbars).
+      setTimeout(() => peek(j), 650 + 60 * Math.min(n, 5));
     },
 
     // `phase` while a video's DASH files are put into one MP4 after they were
@@ -715,11 +741,14 @@ var KeepKeepPanel = (() => {
       const all = j.items.reduce((s, x) => s + (x.done ? 1 : x.f || 0), 0) / j.items.length;
       j.peak = Math.max(j.peak || 0, all);
       j.header.querySelector('.bar').style.width = `${Math.round(j.peak * 100)}%`;
+      if (j.collapsed) headerSummary(j);
     },
 
     finish(job, res) {
       const j = dlJobs.get(job);
       if (!j) return;
+      j.finished = true;
+      j.header.querySelector('.min')?.remove();
       j.items.forEach((it) => it.done || markDone(it.el));
       const n = res.filenames.length;
       setText(j.header, 'Saved to Downloads/KeepKeep', n === 1 ? res.filenames[0] : `${n} files`);
@@ -732,7 +761,8 @@ var KeepKeepPanel = (() => {
       if (!j) return;
       j.items.forEach((it) => it.el.remove());
       j.items = [];
-      j.list?.remove();
+      j.box?.remove();
+      j.header.querySelector('.min')?.remove();
       j.header.classList.add('bad');
       j.header.querySelector('.state').innerHTML = '';
       setText(j.header, text, 'Try again in a moment');
@@ -746,10 +776,46 @@ var KeepKeepPanel = (() => {
     list.classList.toggle('end', list.scrollTop + list.clientHeight >= list.scrollHeight - 2);
   }
 
+  // Hidden files: the header says how far the download is, so it's clear it goes on.
+  function headerSummary(j) {
+    const done = j.items.filter((it) => it.done).length;
+    setText(j.header, null, `${done} of ${j.items.length} saved · ${Math.round((j.peak || 0) * 100)}%`);
+  }
+  function collapse(j, on) {
+    j.collapsed = on;
+    j.box.classList.toggle('collapsed', on);
+    j.header.classList.toggle('collapsed', on);
+    const min = j.header.querySelector('.min');
+    if (min) min.title = on ? 'Show the files' : 'Hide the files (the download goes on)';
+    if (on) headerSummary(j);
+    else if (!j.finished) setText(j.header, null, j.username ? '@' + j.username : '');
+  }
+
+  // Scroll the list to its end and back once, slowly.
+  function peek(j) {
+    const list = j.list;
+    if (!list?.isConnected || j.hovered || j.collapsed || list.scrollHeight <= list.clientHeight + 4) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    j.peeking = true;
+    const glide = (to, ms) => new Promise((res) => {
+      const from = list.scrollTop, t0 = performance.now();
+      const frame = (t) => {
+        const k = Math.min(1, (t - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+        list.scrollTop = from + (to - from) * e;
+        if (k < 1 && !j.hovered) requestAnimationFrame(frame); else res();
+      };
+      requestAnimationFrame(frame);
+    });
+    glide(list.scrollHeight - list.clientHeight, 900)
+      .then(() => new Promise((r) => setTimeout(r, 350)))
+      .then(() => (j.hovered ? null : glide(0, 700)))
+      .then(() => { j.peeking = false; edge(list); });
+  }
+
   // Keep the file being downloaded in view, unless the user is scrolling the list.
   function follow(j, b) {
     const list = j.list;
-    if (!list || j.hovered || list.scrollHeight <= list.clientHeight) return;
+    if (!list || j.hovered || j.peeking || list.scrollHeight <= list.clientHeight) return;
     const top = b.offsetTop - list.offsetTop;
     if (top < list.scrollTop) list.scrollTop = top;
     else if (top + b.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = top + b.offsetHeight - list.clientHeight + 6;
@@ -765,11 +831,16 @@ var KeepKeepPanel = (() => {
     throughFrame = requestAnimationFrame(() => {
       throughFrame = 0;
       const x = px, y = py;
-      const over = [...dlStack.querySelectorAll('.bubble, .items')].some((b) => {
+      const over = [...dlStack.querySelectorAll('.bubble, .listbox:not(.collapsed)')].some((b) => {
         const r = b.getBoundingClientRect();
         return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
       });
-      const under = over && document.elementsFromPoint(x, y).find((n) => n !== dlHost && !dlHost.contains(n));
+      // Our own minimise button always takes the click.
+      const onMin = [...dlStack.querySelectorAll('.min')].some((m) => {
+        const r = m.getBoundingClientRect();
+        return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
+      });
+      const under = over && !onMin && document.elementsFromPoint(x, y).find((n) => n !== dlHost && !dlHost.contains(n));
       const clickable = !!under?.closest?.('button, a[href], input, select, textarea, [role="button"], [role="link"], [data-keepkeep]');
       dlStack.classList.toggle('through', clickable);
     });
@@ -780,7 +851,7 @@ var KeepKeepPanel = (() => {
       const j = dlJobs.get(job);
       if (!j) return;
       dlJobs.delete(job);
-      const all = [...(j.list ? [j.list] : []), j.header];
+      const all = [...(j.box ? [j.box] : []), j.header];
       all.forEach((b, i) => {
         b.style.animationDelay = `${i * 50}ms`;
         b.classList.add('leaving');

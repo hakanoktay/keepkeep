@@ -65,3 +65,34 @@ test('over balloons with nothing clickable under them, they stay solid', async (
   await page.waitForTimeout(100);
   await expect(root('.stack')).not.toHaveClass(/through/);
 });
+
+test('the list flows to its end and back once, to show there is more', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 12);
+  const seen = await root('.items').evaluate(async (l) => {
+    let max = 0;
+    const t0 = performance.now();
+    while (performance.now() - t0 < 3500) { max = Math.max(max, l.scrollTop); await new Promise(requestAnimationFrame); }
+    return { max, end: l.scrollTop, room: l.scrollHeight - l.clientHeight };
+  });
+  expect(seen.max).toBeGreaterThan(seen.room - 5); // reached the end
+  expect(seen.end).toBe(0); // and came back
+});
+
+test('minimise: the files fold away, the header says how far the download is; again shows them', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 7);
+  await page.waitForTimeout(700);
+  await page.evaluate(() => { for (let i = 0; i < 3; i++) KeepKeepPanel.downloads.progress('j', i, 100, 100, true); });
+  await root('.header .min').click();
+  await expect(root('.listbox')).toHaveClass(/collapsed/);
+  await expect(root('.header .sub')).toHaveText(/^3 of 7 saved · \d+%$/);
+  await page.evaluate(() => KeepKeepPanel.downloads.progress('j', 3, 100, 100, true));
+  await expect(root('.header .sub')).toHaveText(/^4 of 7 saved/);
+  await root('.header .min').click();
+  await expect(root('.listbox')).not.toHaveClass(/collapsed/);
+  await expect(root('.header .sub')).toHaveText('@alexijayyy');
+});
+
+test('a single file has no minimise button', async ({ context, extensionId }) => {
+  const { root } = await balloons(context, extensionId, 1);
+  await expect(root('.min')).toHaveCount(0);
+});
