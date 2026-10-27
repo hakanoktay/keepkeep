@@ -613,7 +613,8 @@ var KeepKeepPanel = (() => {
     .header.collapsed .min svg { transform: rotate(180deg); }
     .listbox.leaving { animation: slide-out 0.3s ease-in both; }
     /* The pointer is over a button under the balloons: they fade and let the click through. */
-    .stack.through .job, .stack.through .min { opacity: 0.22; pointer-events: none; }
+    .stack.through .job { opacity: 0.22; }
+    .stack.through .job, .stack.through .job * { pointer-events: none; }
     .bubble { transition: opacity 0.15s; }
     .bubble.leaving { animation: slide-out 0.3s ease-in both; }
     @keyframes slide-in { from { opacity: 0; transform: translateX(40px); } }
