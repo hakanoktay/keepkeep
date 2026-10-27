@@ -62,10 +62,11 @@ test('popup Import opens the app settings', async ({ context, extensionId }) => 
 });
 
 test('app Export saves a backup file', async ({ context, extensionId }) => {
+  test.setTimeout(60_000); // chrome.downloads can be slow while the whole suite runs
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/app.html#settings`);
   await page.click('#export');
-  await expect(page.locator('#backup-status')).toHaveText(/^Saved to Downloads\/KeepKeep as KeepKeep-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  await expect(page.locator('#backup-status')).toHaveText(/^Saved to Downloads\/KeepKeep as KeepKeep-backup-\d{4}-\d{2}-\d{2}\.json$/, { timeout: 30_000 });
 });
 
 test('Settings and About sit in the sidebar footer', async ({ context, extensionId }) => {
