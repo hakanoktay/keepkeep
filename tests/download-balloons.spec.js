@@ -1,6 +1,6 @@
-// The download balloons (panel.js): a post's files stay within about four
-// balloons' height and scroll; the one downloading stays in view; a button
-// under the balloons stays clickable.
+// The download card (panel.js): one card per download; the smart list never
+// scrolls (finished files fold into "✓ n saved", the one downloading and the
+// next two show, the rest wait in "+n more"); a button under it stays clickable.
 const fs = require('fs');
 const path = require('path');
 const { test, expect } = require('./fixtures');
@@ -28,23 +28,38 @@ async function balloons(context, extensionId, n) {
   return { page, root };
 }
 
-test('many files: the list stays about four balloons tall and scrolls', async ({ context, extensionId }) => {
+const visibleNames = (root) => root('.bubble.item:not(.gone) .name').allTextContents();
+
+test('many files: the one downloading and the next two show, the rest wait in "+n more"; no scrolling', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 12);
-  await page.waitForTimeout(800); // slide-in
-  const box = await root('.items').boundingBox();
-  expect(box.height).toBeLessThanOrEqual(260); // about four balloons, shadows included
-  expect(await root('.items').evaluate((l) => l.scrollHeight > l.clientHeight)).toBe(true);
-  await expect(root('.bubble.item')).toHaveCount(12);
+  await page.waitForTimeout(400);
+  expect(await visibleNames(root)).toEqual(['a_1.jpg', 'a_2.jpg', 'a_3.jpg']);
+  await expect(root('.sumrow.more')).toHaveText('+9 more');
+  await expect(root('.sumrow.saved')).toBeHidden();
+  expect(await root('.items').evaluate((l) => l.scrollHeight <= l.clientHeight)).toBe(true);
 });
 
-test('the file being downloaded scrolls into view', async ({ context, extensionId }) => {
+test('finished files fold into "✓ n saved"; the list moves up and keeps its size', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 12);
-  await page.evaluate(() => KeepKeepPanel.downloads.progress('j', 9, 50, 100, false));
-  const visible = await root('.items').evaluate((l) => {
-    const b = l.children[9];
-    return b.offsetTop - l.offsetTop >= l.scrollTop && b.offsetTop - l.offsetTop + b.offsetHeight <= l.scrollTop + l.clientHeight + 8;
-  });
-  expect(visible).toBe(true);
+  await page.waitForTimeout(400);
+  const h0 = (await root('.job').boundingBox()).height;
+  await page.evaluate(() => { for (let i = 0; i < 3; i++) KeepKeepPanel.downloads.progress('j', i, 100, 100, true); });
+  // Just finished: still seen with its ✓ for a moment…
+  expect(await visibleNames(root)).toContain('a_1.jpg');
+  // …then folded away.
+  await expect(root('.sumrow.saved')).toHaveText('3 saved');
+  await expect.poll(() => visibleNames(root)).toEqual(['a_4.jpg', 'a_5.jpg', 'a_6.jpg']);
+  await expect(root('.sumrow.more')).toHaveText('+6 more');
+  const h1 = (await root('.job').boundingBox()).height;
+  expect(Math.abs(h1 - h0)).toBeLessThan(50); // the "✓ n saved" row, nothing else
+  expect(await root('.items').evaluate((l) => l.scrollHeight <= l.clientHeight)).toBe(true);
+});
+
+test('at the end: "✓ n saved" and no "more" row', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 6);
+  await page.evaluate(() => KeepKeepPanel.downloads.finish('j', { filenames: Array.from({ length: 6 }, (_, i) => `a_${i + 1}.jpg`) }));
+  await expect(root('.sumrow.saved')).toHaveText('6 saved');
+  await expect(root('.sumrow.more')).toBeHidden();
 });
 
 test('a button under the balloons: they fade and the click goes through', async ({ context, extensionId }) => {
@@ -64,18 +79,6 @@ test('over balloons with nothing clickable under them, they stay solid', async (
   await page.mouse.move(1100, 40); // the header balloon; nothing under it
   await page.waitForTimeout(100);
   await expect(root('.stack')).not.toHaveClass(/through/);
-});
-
-test('the list flows to its end and back once, to show there is more', async ({ context, extensionId }) => {
-  const { page, root } = await balloons(context, extensionId, 12);
-  const seen = await root('.items').evaluate(async (l) => {
-    let max = 0;
-    const t0 = performance.now();
-    while (performance.now() - t0 < 3500) { max = Math.max(max, l.scrollTop); await new Promise(requestAnimationFrame); }
-    return { max, end: l.scrollTop, room: l.scrollHeight - l.clientHeight };
-  });
-  expect(seen.max).toBeGreaterThan(seen.room - 5); // reached the end
-  expect(seen.end).toBe(0); // and came back
 });
 
 test('minimise: the files fold away, the header says how far the download is; again shows them', async ({ context, extensionId }) => {

@@ -601,10 +601,24 @@ var KeepKeepPanel = (() => {
       display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s, margin 0.3s;
     }
     .listbox.collapsed { grid-template-rows: 0fr; opacity: 0; margin-top: -8px; pointer-events: none; }
-    .items { min-height: 0; max-height: 240px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
-    .items::-webkit-scrollbar { display: none; }
-    .items.more { mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); }
-    .items.more.end { mask-image: none; }
+    /* The smart list never scrolls: finished files fold into "✓ n saved" at the
+       top, the one downloading and the next two show, the rest wait in "+n more". */
+    .items { min-height: 0; overflow: hidden; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+    .items .bubble.item.gone { display: none; }
+    .items .bubble.item.folding { animation: fold 0.32s cubic-bezier(0.4, 0, 0.2, 1) both; }
+    .items .bubble.item.arrive { animation: row-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes fold { to { opacity: 0; transform: translateY(-10px) scale(0.96); max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: -2px; } }
+    .items .bubble.item { max-height: 64px; transition: opacity 0.25s; }
+    .items .bubble.item.waiting { opacity: 0.5; }
+    .sumrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+    .sumrow[hidden] { display: none; }
+    .sumrow.saved { color: var(--text); }
+    .sumrow .check { width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; padding: 3px; flex: none; }
+    .sumrow .check.pop { animation: pop 0.25s ease-out; }
+    .stackthumbs { display: flex; margin-left: auto; }
+    .stackthumbs img, .stackthumbs .ph { width: 24px; height: 24px; border-radius: 6px; object-fit: cover; border: 2px solid var(--bg); margin-left: -8px; background: var(--secondary); box-sizing: content-box; }
+    .stackthumbs :first-child { margin-left: 0; }
+    .sumrow.more { justify-content: center; font-weight: 500; font-size: 12px; padding: 4px 10px 6px; }
     .items .bubble.item { margin: 0; box-shadow: none; border-radius: 10px; animation-name: row-in; }
     .items .bubble.item:hover { background: var(--secondary); }
     @keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
@@ -706,9 +720,10 @@ var KeepKeepPanel = (() => {
       j.box = el('div', 'listbox');
       j.list = el('div', 'items');
       j.box.append(j.list);
-      j.list.addEventListener('scroll', () => edge(j.list), { passive: true });
-      j.list.addEventListener('pointerenter', () => { j.hovered = true; });
-      j.list.addEventListener('pointerleave', () => { j.hovered = false; });
+      j.savedRow = el('div', 'sumrow saved', `<span class="check">${ICONS.check}</span><span class="label"></span><span class="stackthumbs"></span>`);
+      j.moreRow = el('div', 'sumrow more');
+      j.savedRow.hidden = j.moreRow.hidden = true;
+      j.list.append(j.savedRow);
       j.card.append(j.box);
       j.username = username;
       if (n > 1) {
@@ -722,12 +737,10 @@ var KeepKeepPanel = (() => {
         if (!f.thumb) b.querySelector('.thumb').innerHTML = DL_ICONS[f.kind] || DL_ICONS.image;
         b.querySelector('.state').innerHTML = '<span class="pct"></span>';
         j.list.append(b);
-        j.items.push({ el: b, loaded: 0, total: 0, done: false });
+        j.items.push({ el: b, loaded: 0, total: 0, done: false, thumb: f.thumb, shown: true });
       });
-      edge(j.list);
-      // When there are more files than fit, the list flows down once and back,
-      // so it's clear there's more than what shows (macOS hides scrollbars).
-      setTimeout(() => peek(j), 650 + 60 * Math.min(n, 5));
+      j.list.append(j.moreRow);
+      layout(j, true);
     },
 
     // `phase` while a video's DASH files are put into one MP4 after they were
@@ -739,11 +752,14 @@ var KeepKeepPanel = (() => {
       const it = j?.items[index];
       if (!it || it.done) return;
       Object.assign(it, { loaded, total: total || it.total });
-      follow(j, it.el);
       it.f = phase ? Math.min(1, Math.max(0, fraction || 0)) : it.total ? loaded / it.total : 0;
       it.el.querySelector('.bar').style.width = `${Math.round(it.f * 100)}%`;
       if (done) {
         it.done = true;
+        // Seen finishing (the ✓ pops), then it folds into "✓ n saved".
+        it.recent = true;
+        setTimeout(() => { it.recent = false; layout(j); }, 900);
+        layout(j);
         setText(it.el, null, fallbackHeight ? `${size(loaded)} · ${fallbackHeight}p` : size(loaded));
         markDone(it.el);
       } else if (phase) {
@@ -766,7 +782,8 @@ var KeepKeepPanel = (() => {
       if (!j) return;
       j.finished = true;
       j.header.querySelector('.min')?.remove();
-      j.items.forEach((it) => it.done || markDone(it.el));
+      j.items.forEach((it) => { if (!it.done) { it.done = true; markDone(it.el); } });
+      layout(j);
       const n = res.filenames.length;
       setText(j.header, 'Saved to Downloads/KeepKeep', n === 1 ? res.filenames[0] : `${n} files`);
       markDone(j.header);
@@ -787,10 +804,48 @@ var KeepKeepPanel = (() => {
     },
   };
 
-  // A fade at the bottom while more files are below; none at the end.
-  function edge(list) {
-    list.classList.toggle('more', list.scrollHeight > list.clientHeight + 1);
-    list.classList.toggle('end', list.scrollTop + list.clientHeight >= list.scrollHeight - 2);
+  // The smart list: at most the one downloading and the next two as rows;
+  // finished files fold into "✓ n saved" (with their pictures), the rest wait
+  // in "+n more". It never scrolls and keeps the same height however many.
+  const NEXT_SHOWN = 2;
+  function layout(j, instant) {
+    if (!j.list) return;
+    const open = j.items.findIndex((it) => !it.done);
+    let saved = 0, waiting = 0;
+    j.items.forEach((it, i) => {
+      const show = it.done ? !!it.recent : open >= 0 && i <= open + NEXT_SHOWN;
+      if (it.done && !it.recent) saved++;
+      it.el.classList.toggle('waiting', !it.done && i !== open); // the one downloading stands out
+      if (!it.done && !show) waiting++;
+      if (show === it.shown) return;
+      it.shown = show;
+      const b = it.el;
+      b.classList.remove('folding', 'arrive');
+      if (instant) { b.classList.toggle('gone', !show); return; }
+      if (show) {
+        b.classList.remove('gone');
+        void b.offsetWidth;
+        b.classList.add('arrive');
+      } else {
+        b.classList.add('folding');
+        setTimeout(() => { if (!it.shown) b.classList.replace('folding', 'gone'); }, 320);
+      }
+    });
+    if (saved !== j.saved) {
+      const first = !j.saved;
+      j.saved = saved;
+      j.savedRow.hidden = !saved;
+      j.savedRow.querySelector('.label').textContent = `${saved} saved`;
+      const check = j.savedRow.querySelector('.check');
+      check.classList.remove('pop'); void check.offsetWidth; check.classList.add('pop');
+      const pics = j.items.filter((it) => it.done && !it.recent).slice(-4).map((it) => (it.thumb
+        ? Object.assign(document.createElement('img'), { src: it.thumb, alt: '', onerror() { this.replaceWith(el('span', 'ph')); } })
+        : el('span', 'ph')));
+      j.savedRow.querySelector('.stackthumbs').replaceChildren(...pics);
+      if (first && !instant) { j.savedRow.classList.remove('arrive'); }
+    }
+    j.moreRow.hidden = !waiting;
+    j.moreRow.textContent = waiting ? `+${waiting} more` : '';
   }
 
   // Hidden files: the header says how far the download is, so it's clear it goes on.
@@ -806,37 +861,6 @@ var KeepKeepPanel = (() => {
     if (min) min.title = on ? 'Show the files' : 'Hide the files (the download goes on)';
     if (on) headerSummary(j);
     else if (!j.finished) setText(j.header, null, j.username ? '@' + j.username : '');
-  }
-
-  // Scroll the list to its end and back once, slowly.
-  function peek(j) {
-    const list = j.list;
-    if (!list?.isConnected || j.hovered || j.collapsed || list.scrollHeight <= list.clientHeight + 4) return;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    j.peeking = true;
-    const glide = (to, ms) => new Promise((res) => {
-      const from = list.scrollTop, t0 = performance.now();
-      const frame = (t) => {
-        const k = Math.min(1, (t - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-        list.scrollTop = from + (to - from) * e;
-        if (k < 1 && !j.hovered) requestAnimationFrame(frame); else res();
-      };
-      requestAnimationFrame(frame);
-    });
-    glide(list.scrollHeight - list.clientHeight, 900)
-      .then(() => new Promise((r) => setTimeout(r, 350)))
-      .then(() => (j.hovered ? null : glide(0, 700)))
-      .then(() => { j.peeking = false; edge(list); });
-  }
-
-  // Keep the file being downloaded in view, unless the user is scrolling the list.
-  function follow(j, b) {
-    const list = j.list;
-    if (!list || j.hovered || j.peeking || list.scrollHeight <= list.clientHeight) return;
-    const top = b.offsetTop - list.offsetTop;
-    if (top < list.scrollTop) list.scrollTop = top;
-    else if (top + b.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = top + b.offsetHeight - list.clientHeight + 6;
-    edge(list);
   }
 
   // Click-through: over a button, link or field under the balloons, they fade
