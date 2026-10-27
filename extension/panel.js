@@ -579,6 +579,15 @@ var KeepKeepPanel = (() => {
       animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     }
     .bubble.item { margin-left: 24px; padding: 8px 10px; }
+    /* One download = one white card: the header on top, its files under it. */
+    .job {
+      position: relative; flex: none; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
+      pointer-events: auto; animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: opacity 0.15s;
+    }
+    .job.leaving { animation: slide-out 0.3s ease-in both; }
+    .job > .bubble.header { box-shadow: none; border-radius: 0; animation: none; background: none; }
+    .job > .listbox { margin: 0; box-shadow: none; border-radius: 0; animation: none; border-top: 1px solid var(--secondary); }
+    .job > .listbox.collapsed { margin: 0; border-top-color: transparent; }
     /* A post's files in one white box with a shadow: at most about four rows
        tall, the rest scroll inside, so a 20-photo album never covers the page. */
     .listbox {
@@ -604,7 +613,7 @@ var KeepKeepPanel = (() => {
     .header.collapsed .min svg { transform: rotate(180deg); }
     .listbox.leaving { animation: slide-out 0.3s ease-in both; }
     /* The pointer is over a button under the balloons: they fade and let the click through. */
-    .stack.through .bubble, .stack.through .listbox, .stack.through .min { opacity: 0.22; pointer-events: none; }
+    .stack.through .job, .stack.through .min { opacity: 0.22; pointer-events: none; }
     .bubble { transition: opacity 0.15s; }
     .bubble.leaving { animation: slide-out 0.3s ease-in both; }
     @keyframes slide-in { from { opacity: 0; transform: translateX(40px); } }
@@ -676,8 +685,10 @@ var KeepKeepPanel = (() => {
       dlMount();
       hide(true); // the corner card would sit under the balloons
       const header = bubble('header', null, 'Preparing download…', 'Finding the best quality');
-      dlStack.append(header);
-      dlJobs.set(job, { header, items: [] });
+      const card = el('div', 'job');
+      card.append(header);
+      dlStack.append(card);
+      dlJobs.set(job, { card, header, items: [] });
     },
 
     items(job, { username, files }) {
@@ -692,7 +703,7 @@ var KeepKeepPanel = (() => {
       j.list.addEventListener('scroll', () => edge(j.list), { passive: true });
       j.list.addEventListener('pointerenter', () => { j.hovered = true; });
       j.list.addEventListener('pointerleave', () => { j.hovered = false; });
-      j.header.after(j.box);
+      j.card.append(j.box);
       j.username = username;
       if (n > 1) {
         const min = el('button', 'min', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>');
@@ -831,7 +842,7 @@ var KeepKeepPanel = (() => {
     throughFrame = requestAnimationFrame(() => {
       throughFrame = 0;
       const x = px, y = py;
-      const over = [...dlStack.querySelectorAll('.bubble, .listbox:not(.collapsed)')].some((b) => {
+      const over = [...dlStack.querySelectorAll('.job')].some((b) => {
         const r = b.getBoundingClientRect();
         return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
       });
@@ -851,12 +862,8 @@ var KeepKeepPanel = (() => {
       const j = dlJobs.get(job);
       if (!j) return;
       dlJobs.delete(job);
-      const all = [...(j.box ? [j.box] : []), j.header];
-      all.forEach((b, i) => {
-        b.style.animationDelay = `${i * 50}ms`;
-        b.classList.add('leaving');
-        setTimeout(() => b.remove(), 300 + i * 50);
-      });
+      j.card.classList.add('leaving');
+      setTimeout(() => j.card.remove(), 300);
     }, after);
   }
 
