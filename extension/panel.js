@@ -558,86 +558,33 @@ var KeepKeepPanel = (() => {
     startTimer(5000);
   }
 
-  // ---- Download balloons ----
-  // A stack on the right: one balloon with the overall progress, then one per
-  // photo / video with its thumbnail and progress. They leave on their own.
+  // ---- Download card ----
+  // One card for every download in progress, top right. Downloading several
+  // posts one after another adds them to the same card ("Downloading 2 posts").
+  // The smart list never scrolls: finished files fold into "✓ n saved", the
+  // file being downloaded and the next two show, the rest wait in "+n more".
+  // Rows glide in and out and the card eases to its new height. The minimise
+  // button folds the list away; the header then says how far it is.
 
   const DL_STYLE = `
     :host { all: initial; }
     * { box-sizing: border-box; }
     .stack {
       --bg: #fff; --text: #000; --muted: #737373; --secondary: #efefef; --brand: #8119b5; --green: #58c322; --red: #ed4956;
-      --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      position: fixed; top: 16px; right: 16px; z-index: 2147483646; width: 320px; max-height: calc(100vh - 32px);
-      display: flex; flex-direction: column; gap: 8px; overflow-y: auto; scrollbar-width: none; pointer-events: none;
+      --shadow: 0 6px 24px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.08);
+      position: fixed; top: 16px; right: 16px; z-index: 2147483646; width: 320px; pointer-events: none;
       font: 400 14px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text);
     }
-    .stack.dark { --bg: #262626; --text: #f5f5f5; --muted: #a8a8a8; --secondary: #363636; --brand: #aa56d5; --shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
-    .bubble {
-      position: relative; flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 12px; overflow: hidden;
-      background: var(--bg); border-radius: 12px; box-shadow: var(--shadow); pointer-events: auto;
-      animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-    }
-    .bubble.item { margin-left: 24px; padding: 8px 10px; }
-    /* One download = one white card: the header on top, its files under it. */
+    .stack.dark { --bg: #262626; --text: #f5f5f5; --muted: #a8a8a8; --secondary: #363636; --brand: #aa56d5; --shadow: 0 6px 24px rgba(0, 0, 0, 0.55); }
     .job {
-      position: relative; flex: none; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
-      pointer-events: auto; animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: opacity 0.15s;
+      position: relative; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; pointer-events: auto;
+      animation: slide-in 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: opacity 0.2s;
     }
-    .job.leaving { animation: slide-out 0.3s ease-in both; }
-    .job > .bubble.header { box-shadow: none; border-radius: 0; animation: none; background: none; }
-    /* Animated rows can escape overflow:hidden's rounded corners in Chrome; clip-path on
-       the inner parts doesn't let them (and keeps the card's own shadow). */
-    .job > .bubble.header { clip-path: inset(0 round 14px 14px 0 0); }
-    .job > .bubble.header:last-child { clip-path: inset(0 round 14px); }
-    .job > .listbox { clip-path: inset(0 round 0 0 14px 14px); }
-    .job > .listbox { margin: 0; box-shadow: none; border-radius: 0; animation: none; border-top: 1px solid var(--secondary); }
-    .job > .listbox.collapsed { margin: 0; border-top-color: transparent; }
-    /* A post's files in one white box with a shadow: at most about four rows
-       tall, the rest scroll inside, so a 20-photo album never covers the page. */
-    .listbox {
-      flex: none; margin-left: 24px; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
-      pointer-events: auto; animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-      display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s, margin 0.3s;
-    }
-    .listbox.collapsed { grid-template-rows: 0fr; opacity: 0; margin-top: -8px; pointer-events: none; }
-    /* The smart list never scrolls: finished files fold into "✓ n saved" at the
-       top, the one downloading and the next two show, the rest wait in "+n more". */
-    .items { min-height: 0; overflow: hidden; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
-    .items .bubble.item.gone { display: none; }
-    .items .bubble.item.folding { animation: fold 0.32s cubic-bezier(0.4, 0, 0.2, 1) both; }
-    .items .bubble.item.arrive { animation: row-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-    @keyframes fold { to { opacity: 0; transform: translateY(-10px) scale(0.96); max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: -2px; } }
-    .items .bubble.item { max-height: 64px; transition: opacity 0.25s; }
-    .items .bubble.item.waiting { opacity: 0.5; }
-    .sumrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
-    .sumrow[hidden] { display: none; }
-    .sumrow.saved { color: var(--text); }
-    .sumrow .check { width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; padding: 3px; flex: none; }
-    .sumrow .check.pop { animation: pop 0.25s ease-out; }
-    .stackthumbs { display: flex; margin-left: auto; }
-    .stackthumbs img, .stackthumbs .ph { width: 24px; height: 24px; border-radius: 6px; object-fit: cover; border: 2px solid var(--bg); margin-left: -8px; background: var(--secondary); box-sizing: content-box; }
-    .stackthumbs :first-child { margin-left: 0; }
-    .sumrow.more { justify-content: center; font-weight: 500; font-size: 12px; padding: 4px 10px 6px; }
-    .items .bubble.item { margin: 0; box-shadow: none; border-radius: 10px; animation-name: row-in; }
-    .items .bubble.item:hover { background: var(--secondary); }
-    @keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
-    /* The minimise button on the header balloon */
-    .min {
-      flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 7px; padding: 0;
-      background: var(--secondary); color: var(--muted); cursor: pointer; pointer-events: auto; transition: background 0.15s, color 0.15s;
-    }
-    .min:hover { color: var(--text); filter: brightness(0.95); }
-    .min svg { width: 14px; height: 14px; transition: transform 0.25s; }
-    .header.collapsed .min svg { transform: rotate(180deg); }
-    .listbox.leaving { animation: slide-out 0.3s ease-in both; }
-    /* The pointer is over a button under the balloons: they fade and let the click through. */
-    .stack.through .job { opacity: 0.22; }
-    .stack.through .job, .stack.through .job * { pointer-events: none; }
-    .bubble { transition: opacity 0.15s; }
-    .bubble.leaving { animation: slide-out 0.3s ease-in both; }
+    .job.leaving { animation: slide-out 0.32s ease-in both; }
     @keyframes slide-in { from { opacity: 0; transform: translateX(40px); } }
     @keyframes slide-out { to { opacity: 0; transform: translateX(40px); } }
+    .bubble { position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+    .header { clip-path: inset(0 round 14px 14px 0 0); }
     .thumb { flex: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; background: var(--secondary); display: grid; place-items: center; color: var(--muted); }
     .item .thumb { width: 36px; height: 36px; }
     .thumb.logo { background: none; }
@@ -653,20 +600,56 @@ var KeepKeepPanel = (() => {
     .done-mark { width: 22px; height: 22px; border-radius: 50%; background: var(--green); color: #fff; padding: 4px; animation: pop 0.25s ease-out; }
     @keyframes pop { from { transform: scale(0.4); opacity: 0; } }
     .pct { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
-    .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: linear-gradient(90deg, #450b62, #8119b5 50%, #aa56d5); transition: width 0.2s; }
+    .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: linear-gradient(90deg, #450b62, #8119b5 50%, #aa56d5); transition: width 0.3s ease; }
     .done .bar { background: var(--green); }
     svg { display: block; width: 100%; height: 100%; }
+    /* The minimise button */
+    .min {
+      flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 7px; padding: 0;
+      background: var(--secondary); color: var(--muted); cursor: pointer; transition: color 0.15s, filter 0.15s;
+    }
+    .min:hover { color: var(--text); filter: brightness(0.95); }
+    .min svg { width: 14px; height: 14px; transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .job.collapsed .min svg { transform: rotate(180deg); }
+    /* The list: its height eases to the content; rows glide (see layout()). */
+    .listbox { position: relative; overflow: hidden; border-top: 1px solid var(--secondary); transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s, border-color 0.25s; clip-path: inset(0 round 0 0 14px 14px); }
+    .job.collapsed .listbox { opacity: 0; border-top-color: transparent; }
+    .items { position: relative; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+    .row { border-radius: 10px; transition: opacity 0.3s, transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .row.gone { display: none; }
+    .row.waiting { opacity: 0.5; }
+    .row.out { position: absolute; left: 4px; right: 4px; opacity: 0; transform: translateY(-14px) scale(0.97); pointer-events: none; }
+    .row.in { opacity: 0; transform: translateY(10px); }
+    .item { padding: 8px 10px; }
+    .item:hover { background: var(--secondary); }
+    .sumrow { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+    .sumrow.saved { color: var(--text); }
+    .sumrow.bad { color: var(--red); }
+    .sumrow .check { width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; padding: 3px; flex: none; }
+    .sumrow .check.pop { animation: pop 0.25s ease-out; }
+    .stackthumbs { display: flex; margin-left: auto; }
+    .stackthumbs img, .stackthumbs .ph { width: 24px; height: 24px; border-radius: 6px; object-fit: cover; border: 2px solid var(--bg); margin-left: -8px; background: var(--secondary); box-sizing: content-box; }
+    .stackthumbs :first-child { margin-left: 0; }
+    .sumrow.more { justify-content: center; font-weight: 500; font-size: 12px; padding: 4px 10px 6px; }
+    /* Over one of KeepKeep's own buttons under the card: it fades and the click goes through. */
+    .stack.through .job { opacity: 0.18; }
+    .stack.through .job, .stack.through .job * { pointer-events: none; }
+    @media (prefers-reduced-motion: reduce) { .row, .listbox, .job { transition: none; animation: none; } }
   `;
   const DL_ICONS = {
     download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v12M7 10.5l5 5 5-5"/><path d="M4 16.5v2a2.5 2.5 0 0 0 2.5 2.5h11a2.5 2.5 0 0 0 2.5-2.5v-2"/></svg>',
     video: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>',
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 9 9"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
   };
+  const NEXT_SHOWN = 2; // rows after the one downloading
   let dlHost, dlStack;
-  const dlJobs = new Map(); // job → { header, list, items: [{ el, loaded, total, done }] }
+  const dlJobs = new Map(); // job → { username, items: [file], finished, failed }
+  let board = null; // the card: { card, header, box, list, savedRow, moreRow, files: [], peak, collapsed, saved, endTimer }
 
   const el = (tag, cls, html) => Object.assign(document.createElement(tag), { className: cls || '', innerHTML: html || '' });
   const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
   function dlMount() {
     if (!dlHost) {
@@ -680,9 +663,8 @@ var KeepKeepPanel = (() => {
     dlStack.classList.toggle('dark', isDarkPage());
   }
 
-  function bubble(cls, thumb, name, sub, delay = 0) {
+  function bubble(cls, thumb, name, sub) {
     const b = el('div', `bubble ${cls}`);
-    b.style.animationDelay = `${delay}ms`;
     const t = thumb ? Object.assign(el('img', 'thumb'), { src: thumb }) : el('div', 'thumb logo', LOGO);
     if (thumb) t.onerror = () => t.replaceWith(el('div', 'thumb logo', LOGO));
     b.append(t, el('div', 'text'), el('div', 'state', '<div class="spin"></div>'), el('div', 'bar'));
@@ -700,47 +682,182 @@ var KeepKeepPanel = (() => {
     b.querySelector('.bar').style.width = '100%';
   };
 
+  // The card, made on the first download and reused while any is running.
+  function boardFor() {
+    dlMount();
+    if (board && board.card.isConnected && !board.card.classList.contains('leaving')) {
+      clearTimeout(board.endTimer);
+      return board;
+    }
+    const card = el('div', 'job');
+    const header = bubble('header', null, 'Preparing download…', 'Finding the best quality');
+    const min = el('button', 'min', DL_ICONS.chevron);
+    min.title = 'Hide the files (the download goes on)';
+    min.addEventListener('click', (e) => { e.stopPropagation(); collapse(!board.collapsed); });
+    header.querySelector('.state').before(min);
+    const box = el('div', 'listbox');
+    const list = el('div', 'items');
+    const savedRow = el('div', 'row sumrow saved gone', `<span class="check">${ICONS.check}</span><span class="label"></span><span class="stackthumbs"></span>`);
+    const moreRow = el('div', 'row sumrow more gone');
+    list.append(savedRow, moreRow);
+    box.append(list);
+    box.style.height = '0px';
+    card.append(header, box);
+    dlStack.append(card);
+    board = { card, header, box, list, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: 0 };
+    return board;
+  }
+
+  const active = () => [...dlJobs.values()].filter((j) => !j.finished && !j.failed);
+
+  // Header text: what's going on, for one post or several.
+  function headerText() {
+    const b = board;
+    if (!b) return;
+    const files = b.files.filter((f) => !f.job.failed);
+    const posts = new Set(files.map((f) => f.job)).size;
+    const done = files.filter((f) => f.done).length;
+    if (!files.length) return; // still preparing
+    if (b.collapsed) setText(b.header, null, `${done} of ${files.length} saved · ${Math.round(b.peak * 100)}%`);
+    else if (posts > 1) setText(b.header, null, plural(files.length, 'file'));
+    else setText(b.header, null, files[0].job.username ? '@' + files[0].job.username : '');
+    if (posts > 1) setText(b.header, `Downloading ${plural(posts, 'post')}`);
+    else if (files.length === 1) setText(b.header, `Downloading ${files[0].kind === 'video' ? 'video' : 'photo'}`);
+    else setText(b.header, `Downloading ${files.length} files`);
+  }
+
+  function overall() {
+    const b = board;
+    const files = b.files.filter((f) => !f.job.failed);
+    if (!files.length) return;
+    const all = files.reduce((s, f) => s + (f.done ? 1 : f.f || 0), 0) / files.length;
+    b.peak = Math.max(b.peak, all); // never steps back
+    b.header.querySelector('.bar').style.width = `${Math.round(b.peak * 100)}%`;
+  }
+
+  function collapse(on) {
+    const b = board;
+    b.collapsed = on;
+    b.card.classList.toggle('collapsed', on);
+    b.header.querySelector('.min').title = on ? 'Show the files' : 'Hide the files (the download goes on)';
+    fitHeight();
+    headerText();
+  }
+
+  function fitHeight() {
+    const b = board;
+    b.box.style.height = b.collapsed ? '0px' : `${b.list.offsetHeight}px`;
+  }
+
+  // Which rows show: per post in order, the files not yet folded; across all,
+  // the first unfinished one and the next NEXT_SHOWN. Rows glide: the ones
+  // leaving fade up out of their place, the others move to their new places
+  // (FLIP), new ones rise in; the card eases to its new height.
+  function layout() {
+    const b = board;
+    if (!b) return;
+    const files = b.files.filter((f) => !f.job.failed);
+    const open = files.findIndex((f) => !f.done);
+    const rows = [b.savedRow, ...b.files.map((f) => f.el), b.moreRow];
+    const before = new Map(rows.filter((r) => !r.classList.contains('gone')).map((r) => [r, r.offsetTop]));
+    let saved = 0, waiting = 0;
+    const want = new Map();
+    for (const f of b.files) {
+      const i = files.indexOf(f);
+      const show = f.job.failed ? false : f.done ? !!f.recent : open >= 0 && i <= open + NEXT_SHOWN;
+      if (!f.job.failed && f.done && !f.recent) saved++;
+      if (!f.job.failed && !f.done && !show) waiting++;
+      want.set(f.el, show);
+      f.el.classList.toggle('waiting', !f.done && i !== open);
+    }
+    want.set(b.savedRow, saved > 0);
+    want.set(b.moreRow, waiting > 0);
+    if (saved !== b.saved) {
+      b.saved = saved;
+      b.savedRow.querySelector('.label').textContent = `${saved} saved`;
+      const check = b.savedRow.querySelector('.check');
+      check.classList.remove('pop'); void check.offsetWidth; check.classList.add('pop');
+      const pics = files.filter((f) => f.done && !f.recent).slice(-4).map((f) => (f.thumb
+        ? Object.assign(document.createElement('img'), { src: f.thumb, alt: '', onerror() { this.replaceWith(el('span', 'ph')); } })
+        : el('span', 'ph')));
+      b.savedRow.querySelector('.stackthumbs').replaceChildren(...pics);
+    }
+    if (waiting) b.moreRow.textContent = `+${waiting} more`;
+    // Leaving rows: lifted out of the flow at their place, then faded away.
+    for (const [r, show] of want) {
+      const shown = !r.classList.contains('gone') && !r.classList.contains('out');
+      if (shown && !show) {
+        r.style.top = `${r.offsetTop}px`;
+        r.classList.add('out');
+        setTimeout(() => { if (r.classList.contains('out')) { r.classList.remove('out'); r.classList.add('gone'); r.style.top = ''; } }, 320);
+      } else if (!shown && show) {
+        r.classList.remove('gone', 'out');
+        r.style.top = '';
+        r.classList.add('in');
+      }
+    }
+    // Staying rows move from where they were (FLIP).
+    for (const [r, top] of before) {
+      if (!want.get(r) || r.classList.contains('out')) continue;
+      const dy = top - r.offsetTop;
+      if (!dy) continue;
+      r.style.transition = 'none';
+      r.style.transform = `translateY(${dy}px)`;
+    }
+    void b.list.offsetHeight;
+    for (const r of rows) {
+      if (r.classList.contains('in')) requestAnimationFrame(() => r.classList.remove('in'));
+      if (r.style.transform) { r.style.transition = ''; r.style.transform = ''; }
+    }
+    fitHeight();
+    headerText();
+  }
+
+  // All done (or failed): the header says so, then the card leaves.
+  function maybeEnd() {
+    const b = board;
+    if (!b || active().length) return;
+    const files = b.files.filter((f) => !f.job.failed);
+    clearTimeout(b.endTimer);
+    if (files.length) {
+      setText(b.header, 'Saved to Downloads/KeepKeep', files.length === 1 ? files[0].filename : plural(files.length, 'file'));
+      markDone(b.header);
+    }
+    b.endTimer = setTimeout(() => {
+      if (active().length) return;
+      for (const [job, j] of dlJobs) if (j.finished || j.failed) dlJobs.delete(job);
+      b.card.classList.add('leaving');
+      setTimeout(() => b.card.remove(), 320);
+      if (board === b) board = null;
+    }, files.length ? 4000 : 3500);
+  }
+
   const downloads = {
     start(job) {
-      dlMount();
-      hide(true); // the corner card would sit under the balloons
-      const header = bubble('header', null, 'Preparing download…', 'Finding the best quality');
-      const card = el('div', 'job');
-      card.append(header);
-      dlStack.append(card);
-      dlJobs.set(job, { card, header, items: [] });
+      hide(true); // the corner card would sit under the download card
+      const b = boardFor();
+      dlJobs.set(job, { items: [], username: null });
+      if (b.header.classList.contains('done') || b.header.classList.contains('bad')) {
+        b.header.classList.remove('done', 'bad');
+        b.header.querySelector('.state').innerHTML = '<div class="spin"></div>';
+        if (!b.files.length) setText(b.header, 'Preparing download…', 'Finding the best quality');
+      }
     },
 
     items(job, { username, files }) {
       const j = dlJobs.get(job);
-      if (!j) return;
-      const n = files.length;
-      setText(j.header, `Downloading ${n === 1 ? (files[0].kind === 'video' ? 'video' : 'photo') : `${n} files`}`,
-        username ? '@' + username : '');
-      j.box = el('div', 'listbox');
-      j.list = el('div', 'items');
-      j.box.append(j.list);
-      j.savedRow = el('div', 'sumrow saved', `<span class="check">${ICONS.check}</span><span class="label"></span><span class="stackthumbs"></span>`);
-      j.moreRow = el('div', 'sumrow more');
-      j.savedRow.hidden = j.moreRow.hidden = true;
-      j.list.append(j.savedRow);
-      j.card.append(j.box);
+      if (!j || !board) return;
       j.username = username;
-      if (n > 1) {
-        const min = el('button', 'min', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>');
-        min.title = 'Hide the files (the download goes on)';
-        min.addEventListener('click', (e) => { e.stopPropagation(); collapse(j, !j.collapsed); });
-        j.header.querySelector('.state').before(min);
+      for (const f of files) {
+        const row = bubble('row item gone', f.thumb, f.filename, 'Waiting…');
+        if (!f.thumb) row.querySelector('.thumb').innerHTML = DL_ICONS[f.kind] || DL_ICONS.image;
+        row.querySelector('.state').innerHTML = '<span class="pct"></span>';
+        board.list.insertBefore(row, board.moreRow);
+        const it = { el: row, job: j, kind: f.kind, filename: f.filename, thumb: f.thumb, loaded: 0, total: 0, done: false };
+        j.items.push(it);
+        board.files.push(it);
       }
-      files.forEach((f, i) => {
-        const b = bubble('item', f.thumb, f.filename, 'Waiting…', 60 * Math.min(i + 1, 5));
-        if (!f.thumb) b.querySelector('.thumb').innerHTML = DL_ICONS[f.kind] || DL_ICONS.image;
-        b.querySelector('.state').innerHTML = '<span class="pct"></span>';
-        j.list.append(b);
-        j.items.push({ el: b, loaded: 0, total: 0, done: false, thumb: f.thumb, shown: true });
-      });
-      j.list.append(j.moreRow);
-      layout(j, true);
+      layout();
     },
 
     // `phase` while a video's DASH files are put into one MP4 after they were
@@ -748,20 +865,19 @@ var KeepKeepPanel = (() => {
     // `fallbackHeight` (e.g. 720) when the video's single file was saved
     // instead of its DASH files: shown quietly after the size.
     progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight } = {}) {
-      const j = dlJobs.get(job);
-      const it = j?.items[index];
-      if (!it || it.done) return;
+      const it = dlJobs.get(job)?.items[index];
+      if (!it || it.done || !board) return;
       Object.assign(it, { loaded, total: total || it.total });
       it.f = phase ? Math.min(1, Math.max(0, fraction || 0)) : it.total ? loaded / it.total : 0;
       it.el.querySelector('.bar').style.width = `${Math.round(it.f * 100)}%`;
       if (done) {
         it.done = true;
-        // Seen finishing (the ✓ pops), then it folds into "✓ n saved".
-        it.recent = true;
-        setTimeout(() => { it.recent = false; layout(j); }, 900);
-        layout(j);
         setText(it.el, null, fallbackHeight ? `${size(loaded)} · ${fallbackHeight}p` : size(loaded));
         markDone(it.el);
+        // Seen finishing (the ✓ pops), then it folds into "✓ n saved".
+        it.recent = true;
+        setTimeout(() => { it.recent = false; layout(); }, 900);
+        layout();
       } else if (phase) {
         setText(it.el, null, phase === 'convert' ? `Converting ${Math.round(it.f * 100)}%` : 'Joining…');
         it.el.querySelector('.pct').textContent = '';
@@ -769,102 +885,47 @@ var KeepKeepPanel = (() => {
         setText(it.el, null, it.total ? `${size(loaded)} of ${size(it.total)}` : size(loaded));
         it.el.querySelector('.pct').textContent = it.total ? `${Math.round(it.f * 100)}%` : '';
       }
-      // Overall progress on the header balloon. It never steps back, though an
-      // item's bar starts again when its video is converted or joined.
-      const all = j.items.reduce((s, x) => s + (x.done ? 1 : x.f || 0), 0) / j.items.length;
-      j.peak = Math.max(j.peak || 0, all);
-      j.header.querySelector('.bar').style.width = `${Math.round(j.peak * 100)}%`;
-      if (j.collapsed) headerSummary(j);
+      overall();
+      if (board.collapsed) headerText();
     },
 
-    finish(job, res) {
+    finish(job) {
       const j = dlJobs.get(job);
-      if (!j) return;
+      if (!j || !board) return;
       j.finished = true;
-      j.header.querySelector('.min')?.remove();
-      j.items.forEach((it) => { if (!it.done) { it.done = true; markDone(it.el); } });
-      layout(j);
-      const n = res.filenames.length;
-      setText(j.header, 'Saved to Downloads/KeepKeep', n === 1 ? res.filenames[0] : `${n} files`);
-      markDone(j.header);
-      dismiss(job, 4000);
+      for (const it of j.items) if (!it.done) { it.done = true; markDone(it.el); }
+      overall();
+      layout();
+      maybeEnd();
     },
 
     fail(job, text) {
       const j = dlJobs.get(job);
-      if (!j) return;
-      j.items.forEach((it) => it.el.remove());
-      j.items = [];
-      j.box?.remove();
-      j.header.querySelector('.min')?.remove();
-      j.header.classList.add('bad');
-      j.header.querySelector('.state').innerHTML = '';
-      setText(j.header, text, 'Try again in a moment');
-      dismiss(job, 3500);
+      if (!j || !board) return;
+      j.failed = true;
+      for (const it of j.items) it.el.remove();
+      board.files = board.files.filter((f) => f.job !== j);
+      if (!board.files.length && !active().length) {
+        // Nothing else running: the header tells it, as before.
+        board.header.classList.add('bad');
+        board.header.querySelector('.state').innerHTML = '';
+        setText(board.header, text, 'Try again in a moment');
+      } else {
+        // Others go on: a red line in the list for a few seconds.
+        const row = el('div', 'row sumrow bad in');
+        row.textContent = text;
+        board.list.insertBefore(row, board.moreRow);
+        requestAnimationFrame(() => row.classList.remove('in'));
+        setTimeout(() => { row.classList.add('out'); setTimeout(() => { row.remove(); layout(); }, 320); }, 3500);
+      }
+      layout();
+      maybeEnd();
     },
   };
 
-  // The smart list: at most the one downloading and the next two as rows;
-  // finished files fold into "✓ n saved" (with their pictures), the rest wait
-  // in "+n more". It never scrolls and keeps the same height however many.
-  const NEXT_SHOWN = 2;
-  function layout(j, instant) {
-    if (!j.list) return;
-    const open = j.items.findIndex((it) => !it.done);
-    let saved = 0, waiting = 0;
-    j.items.forEach((it, i) => {
-      const show = it.done ? !!it.recent : open >= 0 && i <= open + NEXT_SHOWN;
-      if (it.done && !it.recent) saved++;
-      it.el.classList.toggle('waiting', !it.done && i !== open); // the one downloading stands out
-      if (!it.done && !show) waiting++;
-      if (show === it.shown) return;
-      it.shown = show;
-      const b = it.el;
-      b.classList.remove('folding', 'arrive');
-      if (instant) { b.classList.toggle('gone', !show); return; }
-      if (show) {
-        b.classList.remove('gone');
-        void b.offsetWidth;
-        b.classList.add('arrive');
-      } else {
-        b.classList.add('folding');
-        setTimeout(() => { if (!it.shown) b.classList.replace('folding', 'gone'); }, 320);
-      }
-    });
-    if (saved !== j.saved) {
-      const first = !j.saved;
-      j.saved = saved;
-      j.savedRow.hidden = !saved;
-      j.savedRow.querySelector('.label').textContent = `${saved} saved`;
-      const check = j.savedRow.querySelector('.check');
-      check.classList.remove('pop'); void check.offsetWidth; check.classList.add('pop');
-      const pics = j.items.filter((it) => it.done && !it.recent).slice(-4).map((it) => (it.thumb
-        ? Object.assign(document.createElement('img'), { src: it.thumb, alt: '', onerror() { this.replaceWith(el('span', 'ph')); } })
-        : el('span', 'ph')));
-      j.savedRow.querySelector('.stackthumbs').replaceChildren(...pics);
-      if (first && !instant) { j.savedRow.classList.remove('arrive'); }
-    }
-    j.moreRow.hidden = !waiting;
-    j.moreRow.textContent = waiting ? `+${waiting} more` : '';
-  }
-
-  // Hidden files: the header says how far the download is, so it's clear it goes on.
-  function headerSummary(j) {
-    const done = j.items.filter((it) => it.done).length;
-    setText(j.header, null, `${done} of ${j.items.length} saved · ${Math.round((j.peak || 0) * 100)}%`);
-  }
-  function collapse(j, on) {
-    j.collapsed = on;
-    j.box.classList.toggle('collapsed', on);
-    j.header.classList.toggle('collapsed', on);
-    const min = j.header.querySelector('.min');
-    if (min) min.title = on ? 'Show the files' : 'Hide the files (the download goes on)';
-    if (on) headerSummary(j);
-    else if (!j.finished) setText(j.header, null, j.username ? '@' + j.username : '');
-  }
-
-  // Click-through: over a button, link or field under the balloons, they fade
-  // and the click reaches it, so the next download needn't wait for this one.
+  // Click-through, only for KeepKeep's own buttons under the card (Download,
+  // Profile, Media…): over one of them the card fades and the click reaches
+  // it, so the next download needn't wait. Anywhere else the card stays put.
   let throughFrame = 0, px = 0, py = 0;
   addEventListener('pointermove', (e) => {
     px = e.clientX; py = e.clientY; // the latest position, used by the next frame
@@ -872,30 +933,16 @@ var KeepKeepPanel = (() => {
     throughFrame = requestAnimationFrame(() => {
       throughFrame = 0;
       const x = px, y = py;
-      const over = [...dlStack.querySelectorAll('.job')].some((b) => {
-        const r = b.getBoundingClientRect();
-        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-      });
-      // Our own minimise button always takes the click.
-      const onMin = [...dlStack.querySelectorAll('.min')].some((m) => {
-        const r = m.getBoundingClientRect();
-        return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
-      });
+      const card = dlStack.querySelector('.job');
+      const r = card?.getBoundingClientRect();
+      const over = r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      const min = card?.querySelector('.min')?.getBoundingClientRect();
+      const onMin = min && x >= min.left - 4 && x <= min.right + 4 && y >= min.top - 4 && y <= min.bottom + 4;
       const under = over && !onMin && document.elementsFromPoint(x, y).find((n) => n !== dlHost && !dlHost.contains(n));
-      const clickable = !!under?.closest?.('button, a[href], input, select, textarea, [role="button"], [role="link"], [data-keepkeep]');
-      dlStack.classList.toggle('through', clickable);
+      dlStack.classList.toggle('through', !!under?.closest?.('[data-keepkeep]'));
     });
   }, { passive: true, capture: true });
 
-  function dismiss(job, after) {
-    setTimeout(() => {
-      const j = dlJobs.get(job);
-      if (!j) return;
-      dlJobs.delete(job);
-      j.card.classList.add('leaving');
-      setTimeout(() => j.card.remove(), 300);
-    }, after);
-  }
 
   return { isDarkPage, showDrop, isDropping, showBusy, showInfo, showError, showResult, showRemoved, hide, downloads };
 })();
