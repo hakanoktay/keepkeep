@@ -579,6 +579,19 @@ var KeepKeepPanel = (() => {
       animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     }
     .bubble.item { margin-left: 24px; padding: 8px 10px; }
+    /* A post's files: at most about four balloons tall, the rest scroll inside,
+       so a 20-photo album never covers the page (or the buttons under it). */
+    .items {
+      flex: none; display: flex; flex-direction: column; gap: 8px; max-height: 254px; overflow-y: auto; overscroll-behavior: contain;
+      scrollbar-width: none; pointer-events: auto; padding: 4px 12px 14px; margin: -4px -12px -14px; /* room for the balloons' shadows */
+    }
+    .items::-webkit-scrollbar { display: none; }
+    .items.more { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+    .items.more.end { mask-image: none; }
+    .items.leaving { animation: slide-out 0.3s ease-in both; }
+    /* The pointer is over a button under the balloons: they fade and let the click through. */
+    .stack.through .bubble, .stack.through .items { opacity: 0.22; pointer-events: none; }
+    .bubble, .items { transition: opacity 0.15s; }
     .bubble.leaving { animation: slide-out 0.3s ease-in both; }
     @keyframes slide-in { from { opacity: 0; transform: translateX(40px); } }
     @keyframes slide-out { to { opacity: 0; transform: translateX(40px); } }
@@ -607,7 +620,7 @@ var KeepKeepPanel = (() => {
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 9 9"/></svg>',
   };
   let dlHost, dlStack;
-  const dlJobs = new Map(); // job → { header, items: [{ el, loaded, total, done }] }
+  const dlJobs = new Map(); // job → { header, list, items: [{ el, loaded, total, done }] }
 
   const el = (tag, cls, html) => Object.assign(document.createElement(tag), { className: cls || '', innerHTML: html || '' });
   const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -659,13 +672,19 @@ var KeepKeepPanel = (() => {
       const n = files.length;
       setText(j.header, `Downloading ${n === 1 ? (files[0].kind === 'video' ? 'video' : 'photo') : `${n} files`}`,
         username ? '@' + username : '');
+      j.list = el('div', 'items');
+      j.list.addEventListener('scroll', () => edge(j.list), { passive: true });
+      j.list.addEventListener('pointerenter', () => { j.hovered = true; });
+      j.list.addEventListener('pointerleave', () => { j.hovered = false; });
+      j.header.after(j.list);
       files.forEach((f, i) => {
-        const b = bubble('item', f.thumb, f.filename, 'Waiting…', 60 * (i + 1));
+        const b = bubble('item', f.thumb, f.filename, 'Waiting…', 60 * Math.min(i + 1, 5));
         if (!f.thumb) b.querySelector('.thumb').innerHTML = DL_ICONS[f.kind] || DL_ICONS.image;
         b.querySelector('.state').innerHTML = '<span class="pct"></span>';
-        (j.items.at(-1)?.el || j.header).after(b);
+        j.list.append(b);
         j.items.push({ el: b, loaded: 0, total: 0, done: false });
       });
+      edge(j.list);
     },
 
     // `phase` while a video's DASH files are put into one MP4 after they were
@@ -677,6 +696,7 @@ var KeepKeepPanel = (() => {
       const it = j?.items[index];
       if (!it || it.done) return;
       Object.assign(it, { loaded, total: total || it.total });
+      follow(j, it.el);
       it.f = phase ? Math.min(1, Math.max(0, fraction || 0)) : it.total ? loaded / it.total : 0;
       it.el.querySelector('.bar').style.width = `${Math.round(it.f * 100)}%`;
       if (done) {
@@ -712,6 +732,7 @@ var KeepKeepPanel = (() => {
       if (!j) return;
       j.items.forEach((it) => it.el.remove());
       j.items = [];
+      j.list?.remove();
       j.header.classList.add('bad');
       j.header.querySelector('.state').innerHTML = '';
       setText(j.header, text, 'Try again in a moment');
@@ -719,12 +740,47 @@ var KeepKeepPanel = (() => {
     },
   };
 
+  // A fade at the bottom while more files are below; none at the end.
+  function edge(list) {
+    list.classList.toggle('more', list.scrollHeight > list.clientHeight + 1);
+    list.classList.toggle('end', list.scrollTop + list.clientHeight >= list.scrollHeight - 2);
+  }
+
+  // Keep the file being downloaded in view, unless the user is scrolling the list.
+  function follow(j, b) {
+    const list = j.list;
+    if (!list || j.hovered || list.scrollHeight <= list.clientHeight) return;
+    const top = b.offsetTop - list.offsetTop;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (top + b.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = top + b.offsetHeight - list.clientHeight + 6;
+    edge(list);
+  }
+
+  // Click-through: over a button, link or field under the balloons, they fade
+  // and the click reaches it, so the next download needn't wait for this one.
+  let throughFrame = 0, px = 0, py = 0;
+  addEventListener('pointermove', (e) => {
+    px = e.clientX; py = e.clientY; // the latest position, used by the next frame
+    if (!dlStack?.children.length || throughFrame) return;
+    throughFrame = requestAnimationFrame(() => {
+      throughFrame = 0;
+      const x = px, y = py;
+      const over = [...dlStack.querySelectorAll('.bubble, .items')].some((b) => {
+        const r = b.getBoundingClientRect();
+        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      });
+      const under = over && document.elementsFromPoint(x, y).find((n) => n !== dlHost && !dlHost.contains(n));
+      const clickable = !!under?.closest?.('button, a[href], input, select, textarea, [role="button"], [role="link"], [data-keepkeep]');
+      dlStack.classList.toggle('through', clickable);
+    });
+  }, { passive: true, capture: true });
+
   function dismiss(job, after) {
     setTimeout(() => {
       const j = dlJobs.get(job);
       if (!j) return;
       dlJobs.delete(job);
-      const all = [...j.items.map((it) => it.el).reverse(), j.header];
+      const all = [...(j.list ? [j.list] : []), j.header];
       all.forEach((b, i) => {
         b.style.animationDelay = `${i * 50}ms`;
         b.classList.add('leaving');
