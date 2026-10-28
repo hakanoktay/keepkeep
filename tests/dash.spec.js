@@ -41,7 +41,12 @@ test('missing or broken manifest: no dash, no error', async ({ context, extensio
 test('photos and album items are unchanged', async ({ context, extensionId }) => {
   const album = { media_type: 8, carousel_media: [{ media_type: 1, image_versions2: { candidates: [{ url: V + 'i.jpg', width: 1080, height: 1080 }] } }] };
   const [f] = await files(context, extensionId, album);
-  expect(f).toEqual({ url: V + 'i.jpg', kind: 'image', thumb: V + 'i.jpg' });
+  expect(f).toEqual({ id: null, url: V + 'i.jpg', kind: 'image', thumb: V + 'i.jpg' });
+});
+test('each file carries Instagram\'s id of its photo / video (pk, or the number before "_" in id)', async ({ context, extensionId }) => {
+  const img = (extra) => ({ media_type: 1, image_versions2: { candidates: [{ url: V + 'i.jpg', width: 1080, height: 1080 }] }, ...extra });
+  const album = { media_type: 8, carousel_media: [img({ pk: 31 }), img({ id: '32_77' })] };
+  expect((await files(context, extensionId, album)).map((f) => f.id)).toEqual(['31', '32']);
 });
 test('fallbackHeight: the largest single file in the "720p" sense (its shorter side)', async ({ context, extensionId }) => {
   const big = mpd(rep('video/mp4', 1920, 1080, 2400000, 'vp09.00.40.08', V + 'v1080.mp4'));

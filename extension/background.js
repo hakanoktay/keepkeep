@@ -29,7 +29,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 const jobs = new Map(); // job id → tab id, for progress messages
 
-async function startDownload({ job, mode, files }, tabId) {
+async function startDownload({ job, mode, files, force }, tabId) {
   const allowed = (url) => {
     try {
       const u = new URL(url);
@@ -40,23 +40,37 @@ async function startDownload({ job, mode, files }, tabId) {
   };
   // A video's DASH files (up to 1080p) only from Instagram's CDN too; the audio may be missing.
   const dashOk = (d) => d && allowed(d.video?.url) && (d.audio == null || allowed(d.audio.url));
-  files = (files || []).filter(({ url }) => allowed(url)).map((f) => ({
+  files = (files || []).filter(({ url }) => allowed(url)).map((f, index) => ({
+    index, id: typeof f.id === 'string' && /^\d{1,40}$/.test(f.id) ? f.id : null,
     url: f.url, fallback: allowed(f.fallback) ? f.fallback : null, filename: safeName(f.filename),
     ...(dashOk(f.dash) && { dash: f.dash }),
   }));
   if (!files.length) throw new Error('no files');
+  // Files saved before are skipped (shown as done in the card) unless `force`.
+  const skipped = [];
+  if (!force) {
+    const seen = await Promise.all(files.map((f) => savedBefore(f, mode).catch(() => null)));
+    files = files.filter((f, i) => {
+      if (!seen[i]) return true;
+      skipped.push(f.index);
+      if (tabId != null) chrome.tabs.sendMessage(tabId, { type: 'dl-progress', job, index: f.index, done: true, skipped: true, at: seen[i].at }).catch(() => {});
+      return false;
+    });
+  }
+  if (!files.length) return { ok: true, filenames: [], skipped };
   jobs.set(job, tabId);
   try {
     await ensureHelper();
     const built = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'build', job, mode, files });
     if (!built || built.error) throw new Error(built?.error || 'build failed');
-    for (const { url, filename } of built.outputs) {
+    for (const { url, filename, index, top } of built.outputs) {
       const id = await chrome.downloads.download({
         url, filename: `KeepKeep/${filename}`, conflictAction: 'uniquify', saveAs: false,
       });
-      releaseWhenDone(id, url);
+      const file = files.find((f) => f.index === index);
+      releaseWhenDone(id, url, () => file?.id && downloaded.put({ id: file.id, top: !!top, at: Date.now(), dl: id, name: filename }).catch(() => {}));
     }
-    return { ok: true, filenames: built.outputs.map((o) => o.filename) };
+    return { ok: true, filenames: built.outputs.map((o) => o.filename), skipped };
   } finally {
     jobs.delete(job);
   }
@@ -77,13 +91,64 @@ async function ensureHelper() {
 
 // The blob: URL has to stay valid until Chrome has written the file (including
 // while a "Save as" window is open); free it afterwards.
-function releaseWhenDone(downloadId, url) {
-  const listener = (delta) => {
-    if (delta.id !== downloadId || !delta.state || delta.state.current === 'in_progress') return;
+// `onComplete` once the file is written (also if that happened before the
+// listener was added: small files can finish at once).
+function releaseWhenDone(downloadId, url, onComplete) {
+  let over = false;
+  const end = (state) => {
+    if (over || state === 'in_progress') return;
+    over = true;
     chrome.downloads.onChanged.removeListener(listener);
+    if (state === 'complete') onComplete?.();
     chrome.runtime.sendMessage({ target: 'offscreen', type: 'revoke', url }).catch(() => {});
   };
+  const listener = (delta) => { if (delta.id === downloadId && delta.state) end(delta.state.current); };
   chrome.downloads.onChanged.addListener(listener);
+  chrome.downloads.search({ id: downloadId }).then(([item]) => item && end(item.state), () => {});
+}
+
+// ---- Files saved before (specs/2026-10-28-no-duplicate-downloads.md) ----
+//
+// KeepKeep's own record of every file it saved, by Instagram's id of the
+// photo / video: { id, top, at, dl, name }. In IndexedDB, not
+// chrome.storage: the pages listening to storage would re-render on every
+// file, and users' saved data stays untouched. Losing it only means files
+// are downloaded again.
+
+const downloaded = (() => {
+  let db = null;
+  const open = () => (db ||= new Promise((resolve, reject) => {
+    const req = indexedDB.open('keepkeep', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('downloaded', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => { db = null; reject(req.error); };
+  }));
+  const run = async (mode, fn) => {
+    const store = (await open()).transaction('downloaded', mode).objectStore('downloaded');
+    return new Promise((resolve, reject) => {
+      const req = fn(store);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  };
+  return { get: (id) => run('readonly', (s) => s.get(id)), put: (rec) => run('readwrite', (s) => s.put(rec)) };
+})();
+
+// Whether `file` was saved before and should be skipped: { at } or null
+// (download it). A file saved in a lower quality than is possible now is
+// downloaded again, and so is one Chrome reports as removed. Chrome's word
+// that a file still exists can't be trusted (verified 2026-10-28: after the
+// file was deleted, search() kept answering exists: true), so a skip never
+// claims the file is in the folder: the card says "Downloaded before".
+async function savedBefore(file, mode) {
+  if (!file.id) return null;
+  const rec = await downloaded.get(file.id);
+  if (!rec) return null;
+  const couldBeBetter = file.dash ? mode !== 'standard' : !!file.fallback;
+  if (!rec.top && couldBeBetter) return null;
+  const [item] = rec.dl != null ? await chrome.downloads.search({ id: rec.dl }) : [];
+  if (item && (item.state !== 'complete' || item.exists === false)) return null;
+  return { at: rec.at };
 }
 
 async function thumbnail(url, size) {

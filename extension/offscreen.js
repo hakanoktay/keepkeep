@@ -32,17 +32,19 @@ async function build({ job, mode, files }) {
   const outputs = [];
   try {
     for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const index = file.index ?? i; // the file's place in the whole download (some may have been skipped)
       const send = (progress) => {
         try {
-          chrome.runtime.sendMessage({ type: 'dl-progress', job, index: i, ...progress }).catch(() => {});
+          chrome.runtime.sendMessage({ type: 'dl-progress', job, index, ...progress }).catch(() => {});
         } catch {} // progress is only for show
       };
-      const file = files[i];
       // Set when the single file stands in for the DASH files: its last
       // progress message says so, and which size it is (e.g. 720).
       let fallbackHeight = null;
       const report = (loaded, total, done) => send({ loaded, total, done, ...(done && fallbackHeight && { fallbackHeight }) });
       let bytes = null;
+      let joined = false, usedFallback = false;
       // A video up to 1080p from its DASH files; on any problem with them, the
       // single file below, without a word (a download never fails because of this).
       if (file.dash && mode !== 'standard' && !dashTooBig(file.dash, mode)) {
@@ -51,14 +53,19 @@ async function build({ job, mode, files }) {
           fallbackHeight = file.dash.fallbackHeight || null;
           return null;
         });
+        joined = !!bytes;
       }
       // The original-size address first; if the CDN refuses it, the listed size.
       bytes ||= await fetchWithProgress(file.url, report).catch((e) => {
         if (!file.fallback) throw e;
+        usedFallback = true;
         return fetchWithProgress(file.fallback, report);
       });
       // Into a blob at once, so only one file's bytes are held at a time.
-      outputs.push({ url: URL.createObjectURL(new Blob([bytes], { type: bytes.mediaType })), filename: file.filename });
+      // `top`: the best quality there was (a photo's original size; a video
+      // joined from its DASH files, or one that has none).
+      const top = file.dash ? joined : !!file.fallback && !usedFallback;
+      outputs.push({ url: URL.createObjectURL(new Blob([bytes], { type: bytes.mediaType })), filename: file.filename, index, top });
     }
   } catch (e) {
     for (const { url } of outputs) URL.revokeObjectURL(url); // nothing will download them now

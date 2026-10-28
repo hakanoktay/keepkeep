@@ -48,7 +48,7 @@ There is no build step; `extension/` is loaded unpacked as is.
 | `extension/lib/` | `mediabunny.min.mjs` = Mediabunny 1.61.1 (MPL-2.0, unmodified), `mediabunny.LICENSE`, `README.md` (source: https://github.com/Vanilagy/mediabunny). Keep the license file when updating |
 | `extension/buttons.js` | Profile / Media / Download buttons on posts, reels, profiles; the story hover pill; D key |
 | `extension/video.js` | Scrubber and play/pause for every video |
-| `extension/background.js` | Service worker: downloads (keeps `dash` only if its URLs pass `ALLOWED_HOSTS`), anonymous toolbar icon (`icons/anon*.png`) |
+| `extension/background.js` | Service worker: downloads (keeps `dash` only if its URLs pass `ALLOWED_HOSTS`), the record of files already downloaded (IndexedDB `keepkeep` / `downloaded`, by Instagram's item id; skips them unless `force`: `specs/2026-10-28-no-duplicate-downloads.md`), anonymous toolbar icon (`icons/anon*.png`) |
 | `extension/offscreen.js` | Fetches files (rejects non image/video/audio responses, fallback URL), progress, one blob per file (made as soon as it's built). DASH path when mode ≠ standard: sums both files' progress, phases `convert` / `join`, 60 s no-progress watchdog (`JOIN_STALL_MS`) aborts the join; any failure → single file (`url`, then `fallback`), balloon shows "· 720p" |
 | `extension/app.html`, `app.css` | KeepKeep's own full tab (opened by the popup's "Open KeepKeep" button). Shell with sidebar (Profiles and Media, the lists section under them, Settings and About at the bottom); the CSS is the same family as the store images (Inter in `fonts/`, lilac) |
 | `extension/app/core.js` | App shell and router: `KeepKeepApp.view(name, fn)` registers a view, `go(hash)` navigates, `state`, `on` / `emit` (events), `el` (DOM helper), `icon` |
@@ -101,6 +101,9 @@ There is no build step; `extension/` is loaded unpacked as is.
   post of such an account (e.g. taystecandi), while other accounts embed
   fine. The page carries `EmbedBrokenMedia`; the app's side panel checks for it
   and shows the saved picture with a note instead.
+- **Chrome's `downloads` `exists` (verified 2026-10-28):** stays `true` after
+  the user deletes the file; don't build on it (Playwright tests can't check
+  it either: they move downloads to their own folder).
 - **Album dots:** buttons "Go to slide n"; the current one has
   `aria-current="step"`.
 - **Theme:** CSS variables (`--accent`, `--blue-5`, `--ig-primary-button`, …)

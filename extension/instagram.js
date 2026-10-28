@@ -169,17 +169,20 @@ var InstaApi = (() => {
     }
   }
 
-  // Each photo / video of an API item (all items of an album), in the largest listed size.
+  // Each photo / video of an API item (all items of an album), in the largest
+  // listed size. `id`: Instagram's id of that photo / video (the record of
+  // files already downloaded goes by it).
   function filesOf(item) {
     const parts = item.carousel_media?.length ? item.carousel_media : [item];
     const largest = (list) => list.reduce((a, b) => ((b.width || 0) * (b.height || 0) > (a.width || 0) * (a.height || 0) ? b : a));
     return parts.map((m) => {
       const thumb = pick(m.image_versions2?.candidates, 150); // small preview (a video's cover)
+      const id = m.pk != null ? String(m.pk) : m.id ? String(m.id).split('_')[0] : null;
       if (m.video_versions?.length) {
         const dash = dashOf(m);
-        return { url: largest(m.video_versions).url, kind: 'video', thumb, ...(dash && { dash }) };
+        return { id, url: largest(m.video_versions).url, kind: 'video', thumb, ...(dash && { dash }) };
       }
-      if (m.image_versions2?.candidates?.length) return { url: largest(m.image_versions2.candidates).url, kind: 'image', thumb };
+      if (m.image_versions2?.candidates?.length) return { id, url: largest(m.image_versions2.candidates).url, kind: 'image', thumb };
       return null;
     }).filter(Boolean);
   }

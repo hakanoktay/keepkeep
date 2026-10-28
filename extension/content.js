@@ -145,8 +145,8 @@ var KeepKeepDrop = (() => {
   // Download progress, relayed by the background script.
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type === 'dl-progress') {
-      const { job, index, loaded, total, done, phase, fraction, fallbackHeight } = msg;
-      KeepKeepPanel.downloads.progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight });
+      const { job, index, loaded, total, done, phase, fraction, fallbackHeight, skipped, at } = msg;
+      KeepKeepPanel.downloads.progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight, skipped, at });
     }
   });
 
@@ -230,7 +230,7 @@ var KeepKeepDrop = (() => {
       const base = `${post.username || 'instagram'}_${stamp}`;
       const many = post.files.length > 1;
       let files = post.files.map((f, i) => ({
-        url: f.url, fallback: f.fallback, dash: f.dash, kind: f.kind, thumb: f.thumb,
+        id: f.id, url: f.url, fallback: f.fallback, dash: f.dash, kind: f.kind, thumb: f.thumb,
         filename: `${base}${many ? `_${i + 1}` : ''}.${extension(f)}`,
       }));
       if (only) {
@@ -239,13 +239,7 @@ var KeepKeepDrop = (() => {
           : files.filter((_, i) => i === only.index);
         if (files.length !== 1) throw new Error('item not found');
       }
-      ui.items(job, { username: post.username, files });
-      const res = await chrome.runtime.sendMessage({
-        type: 'download', job, mode: videoMode(videoQuality),
-        files: files.map(({ url, fallback, dash, filename }) => ({ url, fallback, dash, filename })),
-      });
-      if (!res?.ok) throw new Error(res?.error || 'failed');
-      ui.finish(job, res);
+      await save(job, post.username, files, videoQuality);
       return true;
     } catch {
       ui.fail(job, "Couldn't download this post");
@@ -283,22 +277,38 @@ var KeepKeepDrop = (() => {
           let name = `${user}_${compactTime(it.takenAt ? it.takenAt * 1000 : Date.now())}_${suffix}`;
           for (let n = 2; used.has(name); n++) name = name.replace(/(_\d+)?$/, '') + '_' + n; // same minute
           used.add(name);
-          files.push({ url: f.url, dash: f.dash, kind: f.kind, thumb: f.thumb, filename: `${name}.${extension(f)}` });
+          files.push({ id: f.id, url: f.url, dash: f.dash, kind: f.kind, thumb: f.thumb, filename: `${name}.${extension(f)}` });
         }
       }
       if (!files.length) throw new Error('no files');
-      ui.items(job, { username: reel.username, files });
-      const res = await chrome.runtime.sendMessage({
-        type: 'download', job, mode: videoMode(videoQuality),
-        files: files.map(({ url, dash, filename }) => ({ url, dash, filename })),
-      });
-      if (!res?.ok) throw new Error(res?.error || 'failed');
-      ui.finish(job, res);
+      await save(job, reel.username, files, videoQuality);
       return true;
     } catch {
       ui.fail(job, failText);
       return false;
     }
+  }
+
+  // Lists the files in the card and has the background save them. Files
+  // KeepKeep saved before are skipped there (specs/2026-10-28-no-duplicate-
+  // downloads.md); the card then offers "Download again", which saves just
+  // those, with `force`.
+  async function save(job, username, files, videoQuality, force = false) {
+    const ui = KeepKeepPanel.downloads;
+    ui.items(job, { username, files });
+    const res = await chrome.runtime.sendMessage({
+      type: 'download', job, mode: videoMode(videoQuality), force,
+      files: files.map(({ id, url, fallback, dash, filename }) => ({ id, url, fallback, dash, filename })),
+    });
+    if (!res?.ok) throw new Error(res?.error || 'failed');
+    const skipped = (res.skipped || []).map((i) => files[i]).filter(Boolean);
+    ui.finish(job, { ...res, again: skipped.length ? () => downloadAgain(username, skipped, videoQuality) : null });
+  }
+
+  function downloadAgain(username, files, videoQuality) {
+    const job = Math.random().toString(36).slice(2);
+    KeepKeepPanel.downloads.start(job);
+    save(job, username, files, videoQuality, true).catch(() => KeepKeepPanel.downloads.fail(job, "Couldn't download these files"));
   }
 
   // The Video quality setting: 'original' or 'standard' as stored, anything

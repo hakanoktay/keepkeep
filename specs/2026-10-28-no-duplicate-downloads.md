@@ -1,0 +1,57 @@
+# No duplicate downloads
+
+The owner sometimes downloads the same post twice; Chrome then saves
+`name (1).jpg` next to the first copy. KeepKeep should notice files it has
+already saved and not save them again, without folder pickers or extra
+windows (the owner rejected those).
+
+## What extensions can know
+
+- They can't read the disk. Reading `Downloads/KeepKeep` would need the user
+  to pick the folder once (File System Access): a picker, so not used.
+- `chrome.downloads.search({ id })` knows a file KeepKeep downloaded only
+  while it is in Chrome's history (users can clear it), and its `exists` can't
+  be trusted: **verified 2026-10-28 in real Chrome** (dev profile, raw DevTools
+  connection, not Playwright, which moves downloads to its own folder): after
+  the file was deleted from `Downloads/KeepKeep`, `search()` kept answering
+  `exists: true` for 2 s, and no `onChanged` came. Chrome only knows of a
+  removal it made itself (e.g. `removeFile`) or found on its own.
+
+So KeepKeep keeps its own record and never claims a file is still in the
+folder; Chrome's answer is used only when it says a file is gone.
+
+## The record
+
+- One entry per saved file, keyed by **Instagram's id of the photo / video**
+  (the item's `pk`/`id`, also for each album item and story), not by the file
+  name: `{ id, top, at, dl, name }`.
+  - `top`: the file was saved in the best quality available then (photo:
+    the original-size address, not its fallback; video: joined from the
+    DASH files, or it had none).
+  - `at`: when; `dl`: Chrome's download id; `name`: the file name.
+- Kept in **IndexedDB in the service worker** (`background.js`), not in
+  `chrome.storage.local`: the popup, the app page and the buttons on
+  Instagram re-render on every storage change, and the record must never
+  touch users' saved data. Not in backups (another computer doesn't have the
+  files). Losing it is harmless: files are only downloaded again.
+
+## The decision, per file, before fetching
+
+| Record | Chrome says | Result |
+| --- | --- | --- |
+| none | — | download |
+| saved, but lower quality and better is possible now | — | download |
+| saved | the file was removed / the download failed | download |
+| saved | anything else, or nothing (history cleared) | skip: "Downloaded before · 12 Oct" |
+
+Skipped files show in the card as done (grey ✓). When anything was skipped
+the card ends with a **Download again** button that saves just those files,
+ignoring the record (`force`). The card stays longer then (9 s, and while
+hovered). Header: everything skipped → "Already downloaded"; some → "Saved to
+Downloads/KeepKeep" and "n files · k downloaded before".
+
+## Known limit
+
+A file deleted from the folder by the user is still skipped (Chrome doesn't
+notice, see above). That's why every skip says "Downloaded before" (not "in
+your folder") and comes with one-click **Download again**.

@@ -274,9 +274,71 @@ test('the background keeps DASH files only from Instagram\'s CDN', async ({ cont
     { url: V + 'p.mp4', filename: 'one.mp4', dash: { video: { url: 'https://evil.example/v.mp4' }, audio: null, duration: 2 } },
     { url: V + 'p.mp4', filename: 'two.mp4', dash: { video: { url: V + 'v1080.mp4' }, audio: { url: 'https://evil.example/a.mp4' }, duration: 2 } },
   ] }), V);
-  expect(res).toEqual({ ok: true, filenames: ['one.mp4', 'two.mp4'] });
+  expect(res).toEqual({ ok: true, filenames: ['one.mp4', 'two.mp4'], skipped: [] });
   expect(urls).toEqual([V + 'p.mp4', V + 'p.mp4']); // neither DASH pair was tried
   const files = await savedFiles(ext);
   expect(files).toHaveLength(2);
   for (const f of files) expect(f.equals(PROG)).toBe(true);
+});
+
+// ---- Files saved before are not saved again (specs/2026-10-28-no-duplicate-downloads.md) ----
+
+const photoWithId = { ...photo, pk: '3501' };
+const videoWithId = (manifest) => ({ ...video(manifest), pk: '3502' });
+
+// Downloads the same post again on a new page (the fake CDN stays), waits for `header`.
+async function downloadAgain(context, header) {
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.goto('https://www.instagram.com/?page=video-post');
+  const button = page.locator('[data-keepkeep="action-group"] button').nth(2);
+  await expect(button).toBeVisible({ timeout: 5000 });
+  await button.click();
+  await expect(page.locator('#keepkeep-downloads .bubble.header .name')).toHaveText(header, { timeout: 20000 });
+  return page;
+}
+const filesOnDisk = (ext) => ext.evaluate(async () => {
+  await new Promise((r) => setTimeout(r, 300));
+  return (await chrome.downloads.search({ state: 'complete' })).filter((d) => d.exists).length;
+});
+
+test('the same photo twice: skipped the second time (no "(1)" copy), "Download again" saves it anyway', async ({ context, extensionId }) => {
+  const { ext } = await download(context, extensionId, { item: photoWithId });
+  expect(await filesOnDisk(ext)).toBe(1);
+  const page = await downloadAgain(context, 'Already downloaded');
+  await expect(page.locator('#keepkeep-downloads .bubble.item .sub')).toHaveText(/^Downloaded before · /);
+  expect(await filesOnDisk(ext)).toBe(1); // no "(1)" copy
+  await page.locator('#keepkeep-downloads .again').click();
+  await expect(page.locator('#keepkeep-downloads .job:not(.leaving) .bubble.header .name')).toHaveText('Saved to Downloads/KeepKeep', { timeout: 20000 });
+  await expect.poll(() => filesOnDisk(ext)).toBe(2);
+});
+
+test('Chrome\'s download history cleared: KeepKeep still knows, says when it was downloaded', async ({ context, extensionId }) => {
+  const { ext } = await download(context, extensionId, { item: photoWithId });
+  await ext.evaluate(() => chrome.downloads.erase({}));
+  const page = await downloadAgain(context, 'Already downloaded');
+  await expect(page.locator('#keepkeep-downloads .bubble.item .sub')).toHaveText(/^Downloaded before · /);
+  await expect(page.locator('#keepkeep-downloads .again')).toBeVisible();
+  expect(await ext.evaluate(async () => (await chrome.downloads.search({})).length)).toBe(0); // nothing new
+});
+
+// Chrome doesn't notice files deleted outside it (exists stays true; checked in
+// real Chrome 2026-10-28), but when it does know (here: removed through Chrome)
+// the file is downloaded again.
+test('a file Chrome knows was removed is downloaded again', async ({ context, extensionId }) => {
+  const { ext } = await download(context, extensionId, { item: photoWithId });
+  await ext.evaluate(async () => { const [d] = await chrome.downloads.search({ state: 'complete' }); await chrome.downloads.removeFile(d.id); });
+  await downloadAgain(context, 'Saved to Downloads/KeepKeep');
+  await expect.poll(() => filesOnDisk(ext)).toBe(1);
+});
+
+test('saved before in a lower quality: downloaded again when a better one is possible', async ({ context, extensionId }) => {
+  // Standard first (the 720p single file), then Original (1080p from the DASH files).
+  const { ext, requested } = await download(context, extensionId, { item: videoWithId(MPD_1080), quality: 'standard' });
+  expect(requested['v1080.mp4']).toBeUndefined();
+  await ext.evaluate(() => chrome.storage.local.set({ videoQuality: 'original' }));
+  await downloadAgain(context, 'Saved to Downloads/KeepKeep');
+  expect(requested['v1080.mp4']).toBe(1);
+  // …and now that it is in the best quality, a third time is skipped.
+  await downloadAgain(context, 'Already downloaded');
 });

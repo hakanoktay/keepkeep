@@ -604,6 +604,14 @@ var KeepKeepPanel = (() => {
     .pct { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
     .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: linear-gradient(90deg, #450b62, #8119b5 50%, #aa56d5); transition: width 0.3s ease; }
     .done .bar { background: var(--green); }
+    /* Saved before, so not downloaded again (specs/2026-10-28-no-duplicate-downloads.md) */
+    .skipped .done-mark { background: var(--secondary); color: var(--muted); }
+    .skipped .bar { background: var(--secondary); }
+    .again {
+      flex: none; height: 26px; padding: 0 10px; border: 0; border-radius: 13px; background: var(--brand); color: #fff;
+      font: 600 12px/26px inherit; font-family: inherit; white-space: nowrap; cursor: pointer; animation: pop 0.25s ease-out;
+    }
+    .again:hover { filter: brightness(1.1); }
     svg { display: block; width: 100%; height: 100%; }
     /* The minimise button */
     .min {
@@ -734,7 +742,8 @@ var KeepKeepPanel = (() => {
     const back = () => { clearTimeout(b.backTimer); if (b.browsing) { b.browsing = false; relayout(); } };
     for (const type of ['wheel', 'touchstart', 'pointerdown']) track.addEventListener(type, browse, { passive: true });
     card.addEventListener('pointerleave', () => { if (b.browsing) b.backTimer = setTimeout(back, 1500); });
-    card.addEventListener('pointerenter', () => clearTimeout(b.backTimer));
+    card.addEventListener('pointerenter', () => { clearTimeout(b.backTimer); if (b.ending) clearTimeout(b.endTimer); });
+    card.addEventListener('pointerleave', () => { if (b.ending && board === b) leaveLater(b, 2500); });
     moreRow.addEventListener('click', (e) => { if (b.browsing) { e.stopPropagation(); back(); } });
     box.append(list);
     box.style.height = '0px';
@@ -848,24 +857,54 @@ var KeepKeepPanel = (() => {
     headerText();
   }
 
-  // All done (or failed): the header says so, then the card leaves.
+  // All done (or failed): the header says so, then the card leaves. Files
+  // saved before were skipped: the header says that too, and "Download again"
+  // saves just those (the card then waits longer, and while hovered).
   function maybeEnd() {
     const b = board;
     if (!b || active().length) return;
     const files = b.files.filter((f) => !f.job.failed);
+    const skipped = files.filter((f) => f.skipped).length;
+    const again = [...new Set(files.map((f) => f.job.again).filter(Boolean))];
     clearTimeout(b.endTimer);
+    b.header.querySelector('.again')?.remove();
     if (files.length) {
-      setText(b.header, 'Saved to Downloads/KeepKeep', files.length === 1 ? files[0].filename : plural(files.length, 'file'));
+      if (skipped === files.length) {
+        setText(b.header, 'Already downloaded', files.length === 1 ? files[0].filename : `${plural(files.length, 'file')}, downloaded before`);
+      } else {
+        setText(b.header, 'Saved to Downloads/KeepKeep', skipped ? `${plural(files.length, 'file')} · ${skipped} downloaded before`
+          : files.length === 1 ? files[0].filename : plural(files.length, 'file'));
+      }
       markDone(b.header);
+      b.header.classList.toggle('skipped', skipped === files.length);
     }
-    b.endTimer = setTimeout(() => {
-      if (active().length) return;
-      for (const [job, j] of dlJobs) if (j.finished || j.failed) dlJobs.delete(job);
-      clearTimeout(b.backTimer);
-      b.card.classList.add('leaving');
-      setTimeout(() => b.card.remove(), 320);
-      if (board === b) board = null;
-    }, files.length ? 4000 : 3500);
+    if (again.length) {
+      const button = el('button', 'again');
+      button.textContent = 'Download again';
+      button.title = 'Download the skipped files once more (e.g. if you deleted them)';
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        leave(b);
+        again.forEach((fn) => fn());
+      });
+      b.header.querySelector('.state').before(button);
+    }
+    b.ending = true;
+    if (!b.card.matches(':hover')) leaveLater(b, again.length ? 9000 : files.length ? 4000 : 3500);
+  }
+
+  function leaveLater(b, ms) {
+    clearTimeout(b.endTimer);
+    b.endTimer = setTimeout(() => { if (!active().length) leave(b); }, ms);
+  }
+
+  function leave(b) {
+    clearTimeout(b.endTimer);
+    clearTimeout(b.backTimer);
+    for (const [job, j] of dlJobs) if (j.finished || j.failed) dlJobs.delete(job);
+    b.card.classList.add('leaving');
+    setTimeout(() => b.card.remove(), 320);
+    if (board === b) board = null;
   }
 
   const downloads = {
@@ -873,8 +912,11 @@ var KeepKeepPanel = (() => {
       hide(true); // the corner card would sit under the download card
       const b = boardFor();
       dlJobs.set(job, { items: [], username: null });
+      b.ending = false;
+      clearTimeout(b.endTimer);
+      b.header.querySelector('.again')?.remove();
       if (b.header.classList.contains('done') || b.header.classList.contains('bad')) {
-        b.header.classList.remove('done', 'bad');
+        b.header.classList.remove('done', 'bad', 'skipped');
         b.header.querySelector('.state').innerHTML = '<div class="spin"></div>';
         if (!b.files.length) setText(b.header, 'Preparing download…', 'Finding the best quality');
       }
@@ -901,9 +943,20 @@ var KeepKeepPanel = (() => {
     // fetched: 'convert' (Best) or 'join' (Original), `fraction` 0–1.
     // `fallbackHeight` (e.g. 720) when the video's single file was saved
     // instead of its DASH files: shown quietly after the size.
-    progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight } = {}) {
+    // `skipped` (with `at`, when): downloaded before, not downloaded again.
+    progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight, skipped, at } = {}) {
       const it = dlJobs.get(job)?.items[index];
       if (!it || it.done || !board) return;
+      if (skipped) {
+        Object.assign(it, { done: true, skipped: true, started: true, f: 1 });
+        it.el.classList.add('skipped');
+        const when = at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+        setText(it.el, null, `Downloaded before${when ? ' · ' + when : ''}`);
+        markDone(it.el);
+        overall();
+        layout();
+        return;
+      }
       if (!it.started) { it.started = true; it.el.classList.remove('waiting'); }
       Object.assign(it, { loaded, total: total || it.total });
       it.f = phase ? Math.min(1, Math.max(0, fraction || 0)) : it.total ? loaded / it.total : 0;
@@ -924,10 +977,11 @@ var KeepKeepPanel = (() => {
       if (board.collapsed) headerText();
     },
 
-    finish(job) {
+    finish(job, res) {
       const j = dlJobs.get(job);
       if (!j || !board) return;
       j.finished = true;
+      j.again = res?.again || null;
       for (const it of j.items) if (!it.done) { it.done = true; markDone(it.el); }
       overall();
       layout();
@@ -971,8 +1025,11 @@ var KeepKeepPanel = (() => {
       const card = dlStack.querySelector('.job');
       const r = card?.getBoundingClientRect();
       const over = r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-      const min = card?.querySelector('.min')?.getBoundingClientRect();
-      const onMin = min && x >= min.left - 4 && x <= min.right + 4 && y >= min.top - 4 && y <= min.bottom + 4;
+      // The card's own buttons (minimise, Download again) always stay clickable.
+      const onMin = [...(card?.querySelectorAll('.min, .again') || [])].some((n) => {
+        const r = n.getBoundingClientRect();
+        return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
+      });
       const under = over && !onMin && document.elementsFromPoint(x, y).find((n) => n !== dlHost && !dlHost.contains(n));
       dlStack.classList.toggle('through', !!under?.closest?.('[data-keepkeep]'));
     });
