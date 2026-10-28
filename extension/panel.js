@@ -617,14 +617,18 @@ var KeepKeepPanel = (() => {
     .listbox { position: relative; overflow: hidden; border-top: 1px solid var(--secondary); transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s, border-color 0.25s; clip-path: inset(0 round 0 0 14px 14px); }
     .job.collapsed .listbox { opacity: 0; border-top-color: transparent; }
     .items { position: relative; padding: 4px; display: flex; flex-direction: column; }
-    /* The files are one reel in a window of fixed rows; it slides up as files finish. */
-    .track { position: relative; overflow: hidden; flex: none; transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
-    .reel { transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); }
+    /* The files are one list in a window of fixed rows: it scrolls by itself to
+       the file downloading, and by hand; the page under it doesn't scroll. */
+    .track {
+      position: relative; overflow-y: auto; flex: none; overscroll-behavior: contain;
+      scrollbar-width: thin; scrollbar-color: transparent transparent;
+      transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), scrollbar-color 0.2s;
+    }
+    .track:hover { scrollbar-color: var(--secondary) transparent; }
     .reel .item { height: ${ROW_H}px; }
     .row { border-radius: 10px; transition: opacity 0.35s, transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .row.gone { display: none; }
     .row.waiting { opacity: 0.5; }
-    .row.away { opacity: 0; }
     .row.out { position: absolute; left: 4px; right: 4px; opacity: 0; transform: translateY(-14px) scale(0.97); pointer-events: none; }
     .row.in { opacity: 0; transform: translateY(10px); }
     .item { padding: 8px 10px; }
@@ -643,7 +647,9 @@ var KeepKeepPanel = (() => {
     /* Over one of KeepKeep's own buttons under the card: it fades and the click goes through. */
     .stack.through .job { opacity: 0.18; }
     .stack.through .job, .stack.through .job * { pointer-events: none; }
-    @media (prefers-reduced-motion: reduce) { .row, .listbox, .job, .track, .reel { transition: none; animation: none; } }
+    .sumrow.more.back { color: var(--brand); cursor: pointer; }
+    .sumrow.more.back:hover { text-decoration: underline; }
+    @media (prefers-reduced-motion: reduce) { .row, .listbox, .job, .track { transition: none; animation: none; } }
   `;
   const DL_ICONS = {
     download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v12M7 10.5l5 5 5-5"/><path d="M4 16.5v2a2.5 2.5 0 0 0 2.5 2.5h11a2.5 2.5 0 0 0 2.5-2.5v-2"/></svg>',
@@ -711,11 +717,20 @@ var KeepKeepPanel = (() => {
     track.append(reel);
     const moreRow = el('div', 'row sumrow more gone');
     list.append(savedRow, track, moreRow);
+    // Scrolling by hand stops the list following the download; it comes back
+    // to the file downloading 1.5 s after the pointer leaves the card, or at
+    // once with "Back to current".
+    const browse = () => { clearTimeout(board.backTimer); if (!board.browsing) { board.browsing = true; layout(); } };
+    const back = () => { clearTimeout(board.backTimer); if (board.browsing) { board.browsing = false; layout(); } };
+    for (const type of ['wheel', 'touchstart', 'pointerdown']) track.addEventListener(type, browse, { passive: true });
+    card.addEventListener('pointerleave', () => { if (board.browsing) board.backTimer = setTimeout(back, 1500); });
+    card.addEventListener('pointerenter', () => clearTimeout(board.backTimer));
+    moreRow.addEventListener('click', (e) => { if (board.browsing) { e.stopPropagation(); back(); } });
     box.append(list);
     box.style.height = '0px';
     card.append(header, box);
     dlStack.append(card);
-    board = { card, header, box, list, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1 };
+    board = { card, header, box, list, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1, browsing: false };
     return board;
   }
 
@@ -760,10 +775,10 @@ var KeepKeepPanel = (() => {
     b.box.style.height = b.collapsed ? '0px' : `${b.list.offsetHeight}px`;
   }
 
-  // The files stay in their order on one reel behind a window of up to SLOTS
+  // The files stay in their order in one list behind a window of up to SLOTS
   // rows: the first unfinished file sits at the top, the window's height is
-  // fixed, and finishing files only slide the reel up (no rows jump, appear
-  // or vanish in between). Above: "✓ n of N saved"; below: "+n more". Both
+  // fixed, and finishing files only scroll the list up (no rows jump, appear
+  // or vanish in between); not while the user scrolls it. Above: "✓ n of N saved"; below: "+n more". Both
   // are there from the start when the files don't all fit, so the card
   // changes size only when another post joins.
   function layout() {
@@ -778,7 +793,10 @@ var KeepKeepPanel = (() => {
       f.el.classList.toggle('waiting', !f.done && !f.started);
     });
     b.track.style.height = `${slots * ROW_H}px`;
-    b.reel.style.transform = `translateY(${-start * ROW_H}px)`;
+    if (!b.browsing && Math.abs(b.track.scrollTop - start * ROW_H) > 0.5) {
+      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      b.track.scrollTo({ top: start * ROW_H, behavior: still || !b.card.isConnected ? 'instant' : 'smooth' });
+    }
     const many = files.length > slots;
     b.savedRow.classList.toggle('gone', !many);
     b.moreRow.classList.toggle('gone', !many);
@@ -797,7 +815,8 @@ var KeepKeepPanel = (() => {
     }
     b.savedRow.querySelector('.label').textContent = `${saved} of ${files.length} saved`;
     const rest = files.length - start - slots;
-    b.moreRow.textContent = rest > 0 ? `+${rest} more` : '';
+    b.moreRow.classList.toggle('back', b.browsing);
+    b.moreRow.textContent = b.browsing ? 'Back to current' : rest > 0 ? `+${rest} more` : '';
     fitHeight();
     headerText();
   }

@@ -35,7 +35,7 @@ async function balloons(context, extensionId, n) {
 
 const visibleNames = (root) => root('.bubble.item:not(.away) .name').allTextContents();
 
-test('many files: the one downloading and the next two show, the rest wait in "+n more"; no scrolling', async ({ context, extensionId }) => {
+test('many files: the one downloading and the next two show, the rest wait in "+n more"; the card does not grow', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 12);
   await page.waitForTimeout(400);
   expect(await visibleNames(root)).toEqual(['a_1.jpg', 'a_2.jpg', 'a_3.jpg']);
@@ -156,4 +156,37 @@ test('minimise: the files fold away, the header says how far the download is; ag
 test('a single file has the minimise button too', async ({ context, extensionId }) => {
   const { root } = await balloons(context, extensionId, 1);
   await expect(root('.min')).toHaveCount(1);
+});
+
+test('the list scrolls by hand: it stops following, the page stays, it comes back', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 12);
+  await page.evaluate(() => { document.body.style.height = '3000px'; });
+  await page.waitForTimeout(500);
+  const box = await root('.track').boundingBox();
+  await page.mouse.move(box.x + 100, box.y + 60);
+  await page.mouse.wheel(0, 200);
+  await expect.poll(() => root('.track').evaluate((t) => t.scrollTop)).toBeGreaterThan(100);
+  expect(await page.evaluate(() => scrollY)).toBe(0); // the page under it didn't scroll
+  await expect(root('.sumrow.more')).toHaveText('Back to current');
+  // A file finishing doesn't pull the list away from where the user looks.
+  const top = await root('.track').evaluate((t) => t.scrollTop);
+  await page.evaluate(() => KeepKeepPanel.downloads.progress('j', 0, 100, 100, true));
+  await page.waitForTimeout(600);
+  expect(await root('.track').evaluate((t) => t.scrollTop)).toBe(top);
+  // "Back to current": to the file downloading.
+  await root('.sumrow.more').click();
+  await expect.poll(() => root('.track').evaluate((t) => t.scrollTop)).toBe(52);
+  await expect(root('.sumrow.more')).toHaveText('+8 more');
+});
+
+test('after scrolling by hand, leaving the card brings the list back to the current file', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 12);
+  await page.waitForTimeout(500);
+  const box = await root('.track').boundingBox();
+  await page.mouse.move(box.x + 100, box.y + 60);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => root('.track').evaluate((t) => t.scrollTop)).toBeGreaterThan(100);
+  await page.mouse.move(100, 600);
+  await expect.poll(() => root('.track').evaluate((t) => t.scrollTop), { timeout: 4000 }).toBe(0);
+  await expect(root('.sumrow.more')).toHaveText('+9 more');
 });
