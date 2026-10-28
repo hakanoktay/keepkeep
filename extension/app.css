@@ -365,7 +365,7 @@ main[data-view=welcome], main[data-view=whats-new] { display: grid; place-items:
 .whats-new .notes li::before { content: ''; position: absolute; left: 4px; top: 22px; width: 9px; height: 9px; border-radius: 50%; background: var(--brand); }
 .whats-new .go { margin-top: 24px; font-size: 15px; }
 
-/* ---- Side panel (app/post-panel.js): the post, slid in from the right ---- */
+/* ---- Side panel (app/post-panel.js): a post or a profile, slid in from the right ---- */
 #peek {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 60; width: min(440px, 100vw);
   display: flex; flex-direction: column; background: var(--elevated);
@@ -481,3 +481,19 @@ body.peek-open #notice { right: calc(min(440px, 100vw) + 24px); }
 #peek-scrim { position: fixed; inset: 0; z-index: 59; background: rgba(12, 5, 18, 0.28); cursor: pointer; animation: peek-fade 0.24s ease-out both; }
 #peek-scrim.leaving { pointer-events: none; animation: peek-unfade 0.22s ease-in both; }
 @keyframes peek-unfade { to { opacity: 0; } }
+
+/* The profile in the side panel, and the way back from a post opened there */
+.peek-pic { flex: none; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: var(--brand-tint-strong); color: var(--brand); font-size: 22px; font-weight: 700; }
+.peek-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peek-top:has(.peek-pic) { align-items: center; }
+.peek-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; margin: -6px 0 -4px -6px; padding: 4px 8px 4px 4px; border: 0; border-radius: 8px; background: none; color: var(--brand); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.peek-back:hover { background: var(--brand-tint); }
+.peek-back .i { width: 15px; height: 15px; }
+.peek-profile { padding: 16px 18px 24px; background: none; }
+.peek-section { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.peek-section .count { padding: 1px 7px; border-radius: 10px; background: var(--brand-tint); color: var(--brand); font-size: 12px; }
+.peek-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.peek-tile { aspect-ratio: 1; padding: 0; border: 0; border-radius: 6px; overflow: hidden; background: var(--brand-tint); cursor: pointer; }
+.peek-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.25s, filter 0.25s; }
+.peek-tile:hover img { transform: scale(1.04); filter: brightness(0.92); }
+.peek-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }

@@ -17,7 +17,7 @@
   const saved = KeepKeepApp.saved = {
     selected: new Set(),
     bulkDownload: null, // set by download.js: called with the selected media keys
-    openItem: null, // set by post-panel.js: called with a media key when its card is clicked
+    openItem: null, // set by post-panel.js: called with a media or profile key when its card is clicked
     keys: () => current?.keys() || [], // every key the grid shows, in order (for the panel's ← / →)
     removeWithUndo: (keys) => removeKeys(keys), // remove, with the Undo toast
     filters: { q: '', type: 'all', owner: '', since: 'any', sort: 'new', list: null },
@@ -210,9 +210,9 @@
             toggle(box.closest('.card'), e.shiftKey);
             return;
           }
-          // A media card opens the side panel; ⌘ / Ctrl / Shift-click or the
-          // middle button still open the link in a new tab, as links do.
-          const card = e.target.closest('.card[data-key^="m:"]');
+          // A card opens the side panel (a post, or a profile); ⌘ / Ctrl /
+          // Shift-click or the middle button still open the link in a new tab.
+          const card = e.target.closest('.card[data-key]');
           if (!card || !saved.openItem || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
           e.preventDefault();
           saved.openItem(card.dataset.key);

@@ -105,6 +105,7 @@ KeepKeep stays simple and focused – "keep what you see, organise it, use it" �
 Later for the app page itself (in the design spec, left out of 1.1.0):
 - Per-card hover actions: lists, download and remove right on a card, without selecting it first.
 - An "Open in a tab" row in the popup's empty states, leading to the app page.
+- **Profile panel** (minimal version done in `v1.1.0`): a profile card opens the profile in the side panel with what KeepKeep already has (picture, name, lists, the media saved from it). Later, for social media professionals: tabs with more about each saved account (insights, notes, shortlist), only from data that is safe to get (see "On hold" for Instagram's rate limits).
 
 #### 2. Caption search – for everyone (recipes, travel, shopping…)
 

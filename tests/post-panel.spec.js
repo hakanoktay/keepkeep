@@ -157,3 +157,47 @@ test('the large view has a Download button, like the panel', async ({ context, e
   await expect(page.locator('#notice')).toBeVisible();
   await expect(page.locator('#peek-full')).toBeVisible(); // stays in the large view
 });
+
+// A profile card opens the profile in the same panel: what KeepKeep has saved
+// about it, the posts saved from it; a post opened there leads back.
+test('a profile card opens the profile: picture, name, lists, the media saved from it; a post leads back', async ({ context, extensionId }) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/app.html`);
+  await page.evaluate(async (d) => { await chrome.storage.local.clear(); await chrome.storage.local.set(d); }, {
+    ...DATA,
+    'm:CCC': { key: 'CCC', code: 'CCC', type: 'post', username: 'alice', url: 'https://www.instagram.com/p/CCC/', thumb: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', lists: [], addedAt: 5 },
+    'p:alice': { username: 'alice', lists: ['p1'], addedAt: 4 },
+    'p:bob': { username: 'bob', lists: [], addedAt: 3 },
+    'p:dave': { username: 'dave', lists: [], addedAt: 2 },
+    'u:alice': { username: 'alice', fullName: 'Alice Liddell' },
+  });
+  await page.goto(`chrome-extension://${extensionId}/app.html#profiles`);
+  await page.reload();
+  await page.click('.card[data-key="p:alice"] .owner');
+  const panel = page.locator('#peek');
+  await expect(panel.locator('.peek-who b')).toHaveText('@alice');
+  await expect(panel.locator('.peek-name')).toHaveText('Alice Liddell');
+  await expect(panel.locator('.peek-list.on')).toHaveText(['People']); // profile lists only
+  await expect(panel.locator('a.peek-btn')).toHaveAttribute('href', 'https://www.instagram.com/alice/');
+  await expect(panel.locator('.peek-section .count')).toHaveText('2');
+  await expect(panel.locator('.peek-tile')).toHaveCount(2); // CCC and AAA, newest first
+  expect(await panel.locator('.peek-tile').evaluateAll((t) => t.map((x) => x.dataset.key))).toEqual(['m:CCC', 'm:AAA']);
+  expect(context.pages().filter((p) => p.url().includes('instagram.com/alice'))).toEqual([]); // no new tab
+  await expect(page.locator('.card[data-key="p:alice"]')).toHaveClass(/peeking/);
+  // A saved post opens in the panel; → steps to the profile's next post; back returns.
+  await panel.locator('.peek-tile').first().click();
+  await expect(panel.locator('.peek-embed')).toHaveAttribute('src', 'https://www.instagram.com/p/CCC/embed/captioned/');
+  await page.keyboard.press('ArrowRight');
+  await expect(panel.locator('.peek-embed')).toHaveAttribute('src', 'https://www.instagram.com/p/AAA/embed/captioned/');
+  await panel.locator('.peek-back').click();
+  await expect(panel.locator('.peek-who b')).toHaveText('@alice');
+  // ↓ goes to the next profile; one with nothing saved says so.
+  await page.keyboard.press('ArrowDown');
+  await expect(panel.locator('.peek-who b')).toHaveText('@bob');
+  await expect(panel.locator('.peek-tile')).toHaveCount(1);
+  await page.keyboard.press('ArrowDown');
+  await expect(panel.locator('.peek-who b')).toHaveText('@dave');
+  await expect(panel.locator('.peek-note')).toHaveText('Nothing saved from this account yet.');
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+});
