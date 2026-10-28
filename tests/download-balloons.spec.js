@@ -190,3 +190,22 @@ test('after scrolling by hand, leaving the card brings the list back to the curr
   await expect.poll(() => root('.track').evaluate((t) => t.scrollTop), { timeout: 4000 }).toBe(0);
   await expect(root('.sumrow.more')).toHaveText('+9 more');
 });
+
+test('scrolling by hand never hides the file downloading: it sticks to the edge', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 12);
+  await page.evaluate(() => { const d = KeepKeepPanel.downloads; d.progress('j', 0, 100, 100, true); d.progress('j', 1, 100, 100, true); d.progress('j', 2, 40, 100, false); });
+  await page.waitForTimeout(700);
+  const inView = () => root('.track').evaluate((t) => {
+    const r = t.querySelector('.item.current').getBoundingClientRect(), w = t.getBoundingClientRect();
+    return r.top >= w.top - 0.5 && r.bottom <= w.bottom + 0.5;
+  });
+  expect(await root('.item.current .name').textContent()).toBe('a_3.jpg');
+  const box = await root('.track').boundingBox();
+  await page.mouse.move(box.x + 100, box.y + 60);
+  await page.mouse.wheel(0, 400); // down, past it
+  await expect.poll(() => root('.track').evaluate((t) => t.scrollTop)).toBeGreaterThan(300);
+  expect(await inView()).toBe(true);
+  await page.mouse.wheel(0, -1000); // up, to the saved ones
+  await expect.poll(() => root('.track').evaluate((t) => t.scrollTop)).toBe(0);
+  expect(await inView()).toBe(true);
+});

@@ -626,6 +626,9 @@ var KeepKeepPanel = (() => {
     }
     .track:hover { scrollbar-color: var(--secondary) transparent; }
     .reel .item { height: ${ROW_H}px; }
+    /* The file downloading never scrolls out of sight: it sticks to the top or bottom edge. */
+    .reel .item.current { position: sticky; top: 0; bottom: 0; z-index: 1; background: var(--bg); }
+    .reel .item.current:hover { background: var(--secondary); }
     .row { border-radius: 10px; transition: opacity 0.35s, transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .row.gone { display: none; }
     .row.waiting { opacity: 0.5; }
@@ -791,6 +794,7 @@ var KeepKeepPanel = (() => {
     files.forEach((f, i) => {
       f.el.classList.toggle('away', i < start || i >= start + slots);
       f.el.classList.toggle('waiting', !f.done && !f.started);
+      f.el.classList.toggle('current', i === open);
     });
     b.track.style.height = `${slots * ROW_H}px`;
     if (!b.browsing && Math.abs(b.track.scrollTop - start * ROW_H) > 0.5) {
