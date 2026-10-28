@@ -121,7 +121,7 @@ There is no build step; `extension/` is loaded unpacked as is.
   rect for 1.5 s to avoid flicker; the current story falls back to the image
   id.
 - Download card (`panel.js` downloads): one card, fixed size, files in a
-  scrolling list that never reorders, the current file sticky. Every choice
+  scrolling list that never reorders, the current file in a fixed place above it. Every choice
   and every rejected idea is in `specs/2026-10-28-download-card.md`: read it
   before changing the card.
 - Popup settings: the inactive pane is `display:none` (otherwise the popup

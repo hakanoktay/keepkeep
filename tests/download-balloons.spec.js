@@ -1,6 +1,7 @@
-// The download card (panel.js): one card for all downloads; the files sit on a
-// reel behind a fixed window of three rows that slides up as files finish
-// ("✓ n of N saved" above, "+n more" below); a button under it stays clickable.
+// The download card (panel.js): one card for all downloads; the file
+// downloading in a fixed place, the others in a two-row list under it that
+// scrolls on as files finish ("✓ n of N saved" above, "+n more" below); a
+// button under it stays clickable. Decisions: specs/2026-10-28-download-card.md
 const fs = require('fs');
 const path = require('path');
 const { test, expect } = require('./fixtures');
@@ -62,7 +63,7 @@ test('at the end: "✓ n of N saved", the last files in the window, nothing more
   const { page, root } = await balloons(context, extensionId, 6);
   await page.evaluate(() => KeepKeepPanel.downloads.finish('j', { filenames: Array.from({ length: 6 }, (_, i) => `a_${i + 1}.jpg`) }));
   await expect(root('.sumrow.saved')).toHaveText('6 of 6 saved');
-  expect(await visibleNames(root)).toEqual(['a_4.jpg', 'a_5.jpg', 'a_6.jpg']);
+  expect(await visibleNames(root)).toEqual(['a_6.jpg', 'a_4.jpg', 'a_5.jpg']); // the last one in the fixed place
   await expect(root('.sumrow.more')).toHaveText('');
 });
 
@@ -116,13 +117,17 @@ test('the card keeps its size while files finish (no growing downwards)', async 
   expect(Math.abs(h1 - h0)).toBeLessThan(1);
 });
 
-test('files keep their order: a row never jumps to another place', async ({ context, extensionId }) => {
+test('the list keeps the files in their order', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 8);
   const order = () => root('.reel .item .name').allTextContents();
-  const first = await order();
-  await page.evaluate(() => { const d = KeepKeepPanel.downloads; d.progress('j', 1, 100, 100, true); d.progress('j', 0, 50, 100, false); d.progress('j', 0, 100, 100, true); });
-  expect(await order()).toEqual(first);
-  expect(await visibleNames(root)).toEqual(['a_3.jpg', 'a_4.jpg', 'a_5.jpg']);
+  const sorted = (names) => [...names].sort((a, b) => parseInt(a.slice(2)) - parseInt(b.slice(2)));
+  for (const step of [[1], [0], [2, 3], [5]]) {
+    await page.evaluate((s) => { for (const i of s) KeepKeepPanel.downloads.progress('j', i, 100, 100, true); }, step);
+    const names = await order();
+    expect(names).toEqual(sorted(names));
+    expect(names).not.toContain(await root('.now .name').textContent());
+  }
+  expect(await root('.now .name').textContent()).toBe('a_5.jpg');
 });
 
 test('files finishing at once (already in the cache) never make the card grow', async ({ context, extensionId }) => {
@@ -191,23 +196,22 @@ test('after scrolling by hand, leaving the card brings the list back to the curr
   await expect(root('.sumrow.more')).toHaveText('+9 more');
 });
 
-test('scrolling by hand never hides the file downloading: it sticks to the edge', async ({ context, extensionId }) => {
+test('scrolling by hand never moves the file downloading: it has its own place', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 12);
-  await page.evaluate(() => { const d = KeepKeepPanel.downloads; d.progress('j', 0, 100, 100, true); d.progress('j', 1, 100, 100, true); d.progress('j', 2, 40, 100, false); });
+  await page.evaluate(() => { const d = KeepKeepPanel.downloads; for (let i = 0; i < 6; i++) d.progress('j', i, 100, 100, true); d.progress('j', 6, 40, 100, false); });
   await page.waitForTimeout(700);
-  const inView = () => root('.track').evaluate((t) => {
-    const r = t.querySelector('.item.current').getBoundingClientRect(), w = t.getBoundingClientRect();
-    return r.top >= w.top - 0.5 && r.bottom <= w.bottom + 0.5;
-  });
-  expect(await root('.item.current .name').textContent()).toBe('a_3.jpg');
+  const place = () => root('.now .item').evaluate((r) => ({ name: r.querySelector('.name').textContent, top: r.getBoundingClientRect().top }));
+  const p0 = await place();
+  expect(p0.name).toBe('a_7.jpg');
   const box = await root('.track').boundingBox();
-  await page.mouse.move(box.x + 100, box.y + 60);
-  await page.mouse.wheel(0, 400); // down, past it
+  await page.mouse.move(box.x + 100, box.y + 30);
+  await page.mouse.wheel(0, 400); // down
   await expect.poll(() => root('.track').evaluate((t) => t.scrollTop)).toBeGreaterThan(300);
-  expect(await inView()).toBe(true);
+  expect(await place()).toEqual(p0);
   await page.mouse.wheel(0, -1000); // up, to the saved ones
   await expect.poll(() => root('.track').evaluate((t) => t.scrollTop)).toBe(0);
-  expect(await inView()).toBe(true);
+  expect(await place()).toEqual(p0);
+  expect(await root('.reel .item .name').allTextContents()).not.toContain('a_7.jpg'); // not twice
 });
 
 test('the pointer on a card that is leaving throws no error', async ({ context, extensionId }) => {

@@ -9,20 +9,20 @@ changing how the card behaves, so a rejected idea doesn't come back.
 
 - **One card for all downloads.** A second post started while one is running
   joins the same card ("Downloading 2 posts · 21 files"); no second card.
-- **The size is fixed.** A window of up to 3 file rows, with "✓ n of N saved"
-  above and "+n more" below; both lines are there from the start when the
-  files don't all fit. The card changes height only when another post joins
-  (eased).
-- **Files never move to another place.** They stay in their order in one
-  list; a file finishing only scrolls the list up (smoothly) so the first
-  unfinished file is at the top.
+- **The size is fixed.** "✓ n of N saved", then the file downloading in its
+  own fixed place, then a list window of up to 2 rows, then "+n more"; both
+  lines are there from the start when the files don't all fit. The card
+  changes height only when another post joins (eased).
+- **The file downloading has its own fixed place** (`.now`, under the saved
+  line), never in the list as well. When it finishes it drops into the list
+  and the next one rises in; at the end the last file stays there.
+- **The list keeps the other files in their order**: finished ones above,
+  waiting ones below; a file finishing only scrolls it on (smoothly) so the
+  next waiting file is at the top.
 - **The list scrolls by hand.** Scrolling stops the auto-follow; the page
   under the card doesn't scroll. Following comes back with "Back to current"
   (the "+n more" line turns into it) or 1.5 s after the pointer leaves the
   card.
-- **The file downloading is never out of sight.** Its row is `position:
-  sticky` (top and bottom 0): while scrolling it sticks to the top or bottom
-  edge of the window.
 - **Minimise** (the chevron) is on every download, a single file too; folded,
   the header says "x of y saved · n%".
 - **Click-through only over KeepKeep's own buttons** (`[data-keepkeep]`):
@@ -42,7 +42,12 @@ changing how the card behaves, so a rejected idea doesn't come back.
 - **Pulling the list back to the current file after every finished file,
   even while the user scrolls:** rejected before building it. Fast files
   would snap the list back all the time and make scrolling impossible. The
-  sticky current row solves "where is the current file" instead.
+  fixed place for the current file solves "where is it" instead.
+- **The current file as a sticky row in the list** (`position: sticky`, top
+  and bottom 0; 2026-10-28): scrolling down it stuck to the top, which was
+  right, but scrolling up to the saved files it stuck to the bottom: the eye
+  had to look for it in two places, and a row behind it showed under it.
+  Replaced the same day by the fixed place above the list.
 - **Fading the card whenever the pointer is over it, or over anything
   clickable under it:** the card kept going transparent. Now only over
   KeepKeep's own buttons.

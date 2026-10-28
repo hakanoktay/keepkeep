@@ -567,7 +567,7 @@ var KeepKeepPanel = (() => {
   // button folds the list away; the header then says how far it is.
 
   const ROW_H = 52; // one file row
-  const SLOTS = 3; // file rows in the window
+  const SLOTS = 3; // file rows: the one downloading and two in the list
   const DL_STYLE = `
     :host { all: initial; }
     * { box-sizing: border-box; }
@@ -626,9 +626,12 @@ var KeepKeepPanel = (() => {
     }
     .track:hover { scrollbar-color: var(--secondary) transparent; }
     .reel .item { height: ${ROW_H}px; }
-    /* The file downloading never scrolls out of sight: it sticks to the top or bottom edge. */
-    .reel .item.current { position: sticky; top: 0; bottom: 0; z-index: 1; background: var(--bg); }
-    .reel .item.current:hover { background: var(--secondary); }
+    /* The file downloading has its own fixed place above the list; scrolling never moves it. */
+    .now { position: relative; flex: none; }
+    .now .item { height: ${ROW_H}px; }
+    .now.ruled { border-bottom: 1px solid var(--secondary); }
+    .now .item.rise { animation: rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
     .row { border-radius: 10px; transition: opacity 0.35s, transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .row.gone { display: none; }
     .row.waiting { opacity: 0.5; }
@@ -715,12 +718,13 @@ var KeepKeepPanel = (() => {
     const box = el('div', 'listbox');
     const list = el('div', 'items');
     const savedRow = el('div', 'row sumrow saved gone', `<span class="check">${ICONS.check}</span><span class="label"></span><span class="stackthumbs"></span>`);
+    const now = el('div', 'now');
     const track = el('div', 'track');
     const reel = el('div', 'reel');
     track.append(reel);
     const moreRow = el('div', 'row sumrow more gone');
-    list.append(savedRow, track, moreRow);
-    const b = { card, header, box, list, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1, browsing: false };
+    list.append(savedRow, now, track, moreRow);
+    const b = { card, header, box, list, now, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1, browsing: false };
     // Scrolling by hand stops the list following the download; it comes back
     // to the file downloading 1.5 s after the pointer leaves the card, or at
     // once with "Back to current". The handlers keep to their own card: a
@@ -781,30 +785,46 @@ var KeepKeepPanel = (() => {
     b.box.style.height = b.collapsed ? '0px' : `${b.list.offsetHeight}px`;
   }
 
-  // The files stay in their order in one list behind a window of up to SLOTS
-  // rows: the first unfinished file sits at the top, the window's height is
-  // fixed, and finishing files only scroll the list up (no rows jump, appear
-  // or vanish in between); not while the user scrolls it. Above: "✓ n of N saved"; below: "+n more". Both
-  // are there from the start when the files don't all fit, so the card
-  // changes size only when another post joins.
+  // The file downloading (the first unfinished one; at the end the last file)
+  // sits in its own fixed place, under "✓ n of N saved". The other files stay
+  // in their order in a list below it, a window of up to two rows: it shows
+  // the files after the one downloading and scrolls on as files finish, or by
+  // hand (then it stays put). A finished file drops from the fixed place into
+  // the list and the next one rises in. The card's height is fixed; it
+  // changes only when another post joins.
   function layout() {
     const b = board;
     if (!b) return;
     const files = b.files.filter((f) => !f.job.failed);
-    const slots = Math.min(files.length, SLOTS);
     const open = files.findIndex((f) => !f.done);
-    const start = Math.max(0, Math.min(open < 0 ? files.length : open, files.length - slots));
-    files.forEach((f, i) => {
+    const cur = files[open < 0 ? files.length - 1 : open];
+    // The fixed place: the current file; the list: all the others, in order.
+    const was = b.now.firstElementChild;
+    if (cur && was !== cur.el) {
+      // Only the two rows move, so a list scrolled by hand stays where it is.
+      const i = files.findIndex((f) => f.el === was);
+      if (i >= 0) b.reel.insertBefore(was, files.slice(i + 1).find((f) => f.el.parentNode === b.reel)?.el || null);
+      cur.el.classList.remove('rise');
+      b.now.replaceChildren(cur.el);
+      if (was) { void cur.el.offsetWidth; cur.el.classList.add('rise'); }
+    }
+    const rest = files.filter((f) => f !== cur);
+    const slots = Math.min(rest.length, SLOTS - 1);
+    const next = open < 0 ? rest.length : open; // the first file after the current one, in the list
+    const start = Math.max(0, Math.min(next, rest.length - slots));
+    rest.forEach((f, i) => {
       f.el.classList.toggle('away', i < start || i >= start + slots);
       f.el.classList.toggle('waiting', !f.done && !f.started);
-      f.el.classList.toggle('current', i === open);
     });
+    cur?.el.classList.remove('away');
+    cur?.el.classList.toggle('waiting', !cur.done && !cur.started);
+    b.now.classList.toggle('ruled', slots > 0);
     b.track.style.height = `${slots * ROW_H}px`;
     if (!b.browsing && Math.abs(b.track.scrollTop - start * ROW_H) > 0.5) {
       const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
       b.track.scrollTo({ top: start * ROW_H, behavior: still || !b.card.isConnected ? 'instant' : 'smooth' });
     }
-    const many = files.length > slots;
+    const many = files.length > SLOTS;
     b.savedRow.classList.toggle('gone', !many);
     b.moreRow.classList.toggle('gone', !many);
     const saved = files.filter((f) => f.done).length;
@@ -821,9 +841,9 @@ var KeepKeepPanel = (() => {
       b.savedRow.querySelector('.stackthumbs').replaceChildren(...pics);
     }
     b.savedRow.querySelector('.label').textContent = `${saved} of ${files.length} saved`;
-    const rest = files.length - start - slots;
+    const more = rest.length - start - slots;
     b.moreRow.classList.toggle('back', b.browsing);
-    b.moreRow.textContent = b.browsing ? 'Back to current' : rest > 0 ? `+${rest} more` : '';
+    b.moreRow.textContent = b.browsing ? 'Back to current' : more > 0 ? `+${more} more` : '';
     fitHeight();
     headerText();
   }
