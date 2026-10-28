@@ -74,7 +74,8 @@ async function download(context, extensionId, { item, quality, broken = {}, serv
   await expect(header.locator('.name')).toHaveText('Saved to Downloads/KeepKeep', { timeout: 20000 });
   await expect(header).not.toHaveClass(/bad/);
   await expect(page.locator('#keepkeep-downloads .bubble.item:not(.done)')).toHaveCount(0);
-  const names = await page.locator('#keepkeep-downloads .bubble.item .name').allTextContents();
+  // In file order (the card shows the file downloading, or the last one, above the list).
+  const names = (await page.locator('#keepkeep-downloads .bubble.item .name').allTextContents()).sort();
   const shown = await page.evaluate(() => [...window.shown]);
   // The overall bar never steps back (e.g. when a video's conversion starts).
   const headerBar = await page.evaluate(() => window.headerBar);

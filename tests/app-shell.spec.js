@@ -65,3 +65,30 @@ test('a broken hash shows the media view without a page error', async ({ context
   await expect(page.locator('main')).toHaveAttribute('data-view', 'media');
   expect(errors).toEqual([]);
 });
+
+// On a post page (/p/<code>/) the owner takes a request to Instagram: the
+// popup's buttons must not move while it waits (Open KeepKeep shrank under the
+// pointer and a click landed on Download).
+test('popup on a post page: the header buttons are in place at once and never move', async ({ context, extensionId }) => {
+  const popup = await context.newPage();
+  await popup.addInitScript(() => {
+    chrome.tabs.query = async () => [{ id: 7, url: 'https://www.instagram.com/p/ABC123/' }];
+    chrome.tabs.sendMessage = (id, msg) => new Promise((r) => setTimeout(() => r(msg.type === 'page-info'
+      ? { profile: 'alexijayyy', media: { key: 'ABC123', code: 'ABC123', storyPk: null, url: 'https://www.instagram.com/p/ABC123/' } }
+      : { ok: true }), 600));
+  });
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  const layout = () => popup.evaluate(() => {
+    const shown = getComputedStyle(document.querySelector('.header-actions')).visibility !== 'hidden';
+    return { shown, boxes: [...document.querySelectorAll('.header-actions button')].filter((b) => b.offsetParent).map((b) => {
+      const r = b.getBoundingClientRect(); return `${b.id || b.dataset.action || b.className}:${Math.round(r.left)}:${Math.round(r.width)}`;
+    }) };
+  });
+  await expect.poll(async () => (await layout()).shown).toBe(true);
+  const first = await layout();
+  expect(first.boxes.some((b) => b.startsWith('download:'))).toBe(true);
+  await expect(popup.locator('.open-label')).toBeHidden();
+  await expect(popup.locator('.page-btn[data-action="profile"]')).toBeDisabled(); // owner not known yet
+  await expect(popup.locator('.page-btn[data-action="profile"]')).toBeEnabled(); // …now it is
+  expect((await layout()).boxes).toEqual(first.boxes);
+});

@@ -65,6 +65,10 @@ body::before {
 .page-actions .page-btn.saved:hover .i:first-child { display: none; }
 .page-actions .page-btn.saved:hover .i + .i { display: inline-block; }
 .page-actions .page-btn.busy { opacity: 0.5; cursor: progress; }
+.page-actions .page-btn:disabled { opacity: 0.4; cursor: default; background: none; }
+/* Until the popup knows which page is open, the header buttons wait unseen, so
+   they never move under the pointer (Open KeepKeep → icon on posts, profiles). */
+body.page-unknown .header-actions { visibility: hidden; }
 #settings { color: var(--muted); }
 h1 { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; margin: 0; }
 h1 .logo { width: 24px; height: 24px; display: block; }
