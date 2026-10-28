@@ -710,7 +710,7 @@ var KeepKeepPanel = (() => {
     const header = bubble('header', null, 'Preparing download…', 'Finding the best quality');
     const min = el('button', 'min', DL_ICONS.chevron);
     min.title = 'Hide the files (the download goes on)';
-    min.addEventListener('click', (e) => { e.stopPropagation(); collapse(!board.collapsed); });
+    min.addEventListener('click', (e) => { e.stopPropagation(); if (board === b) collapse(!b.collapsed); });
     header.querySelector('.state').before(min);
     const box = el('div', 'listbox');
     const list = el('div', 'items');
@@ -720,21 +720,24 @@ var KeepKeepPanel = (() => {
     track.append(reel);
     const moreRow = el('div', 'row sumrow more gone');
     list.append(savedRow, track, moreRow);
+    const b = { card, header, box, list, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1, browsing: false };
     // Scrolling by hand stops the list following the download; it comes back
     // to the file downloading 1.5 s after the pointer leaves the card, or at
-    // once with "Back to current".
-    const browse = () => { clearTimeout(board.backTimer); if (!board.browsing) { board.browsing = true; layout(); } };
-    const back = () => { clearTimeout(board.backTimer); if (board.browsing) { board.browsing = false; layout(); } };
+    // once with "Back to current". The handlers keep to their own card: a
+    // leaving card (no longer `board`) still gets pointer events.
+    const relayout = () => { if (board === b) layout(); };
+    const browse = () => { clearTimeout(b.backTimer); if (!b.browsing) { b.browsing = true; relayout(); } };
+    const back = () => { clearTimeout(b.backTimer); if (b.browsing) { b.browsing = false; relayout(); } };
     for (const type of ['wheel', 'touchstart', 'pointerdown']) track.addEventListener(type, browse, { passive: true });
-    card.addEventListener('pointerleave', () => { if (board.browsing) board.backTimer = setTimeout(back, 1500); });
-    card.addEventListener('pointerenter', () => clearTimeout(board.backTimer));
-    moreRow.addEventListener('click', (e) => { if (board.browsing) { e.stopPropagation(); back(); } });
+    card.addEventListener('pointerleave', () => { if (b.browsing) b.backTimer = setTimeout(back, 1500); });
+    card.addEventListener('pointerenter', () => clearTimeout(b.backTimer));
+    moreRow.addEventListener('click', (e) => { if (b.browsing) { e.stopPropagation(); back(); } });
     box.append(list);
     box.style.height = '0px';
     card.append(header, box);
     dlStack.append(card);
-    board = { card, header, box, list, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1, browsing: false };
-    return board;
+    board = b;
+    return b;
   }
 
   const active = () => [...dlJobs.values()].filter((j) => !j.finished && !j.failed);
@@ -838,6 +841,7 @@ var KeepKeepPanel = (() => {
     b.endTimer = setTimeout(() => {
       if (active().length) return;
       for (const [job, j] of dlJobs) if (j.finished || j.failed) dlJobs.delete(job);
+      clearTimeout(b.backTimer);
       b.card.classList.add('leaving');
       setTimeout(() => b.card.remove(), 320);
       if (board === b) board = null;

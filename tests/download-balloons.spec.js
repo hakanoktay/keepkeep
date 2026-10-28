@@ -209,3 +209,20 @@ test('scrolling by hand never hides the file downloading: it sticks to the edge'
   await expect.poll(() => root('.track').evaluate((t) => t.scrollTop)).toBe(0);
   expect(await inView()).toBe(true);
 });
+
+test('the pointer on a card that is leaving throws no error', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 5);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const box = await root('.track').boundingBox();
+  await page.mouse.move(box.x + 100, box.y + 40);
+  await page.mouse.wheel(0, 100);
+  await page.evaluate(() => KeepKeepPanel.downloads.finish('j', {}));
+  await page.waitForTimeout(4100); // the card starts leaving
+  await page.mouse.move(100, 600);
+  await page.mouse.move(box.x + 100, box.y + 40);
+  await page.mouse.wheel(0, 100);
+  await root('.min').click({ force: true, timeout: 500 }).catch(() => {});
+  await page.waitForTimeout(1800);
+  expect(errors).toEqual([]);
+});
