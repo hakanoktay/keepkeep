@@ -55,3 +55,22 @@ Downloads/KeepKeep" and "n files · k downloaded before".
 A file deleted from the folder by the user is still skipped (Chrome doesn't
 notice, see above). That's why every skip says "Downloaded before" (not "in
 your folder") and comes with one-click **Download again**.
+
+## The Downloads view (2026-10-29)
+
+The owner asked for a place in the app to see this. `app/downloads.js`: a
+**Downloads** section in the sidebar under Media and Profiles, listing every
+post and story KeepKeep downloaded (newest first; picture, owner, date, "7
+files"). It is a history, not a collection: no lists, no dragging.
+
+- Recorded by the background for each post / story with at least one file
+  downloaded (`posts` store, a small square picture made at once, since
+  Instagram's addresses expire). Only downloads since this version.
+- A card opens the side panel: "Downloaded 28 Oct · 7 files", **Download
+  again** (through an Instagram tab, `force`; a story means just that story),
+  **Save to Media** (from what the record knows; "In Media" once there), Open
+  on Instagram; ← / → step through the list.
+- On top: the **Skip files downloaded before** switch (`skipDownloaded` in
+  `chrome.storage.local`, in backups; on unless `false`) and **Forget** (asks
+  first; clears both stores, files stay where they are). Settings → Downloads
+  points here.

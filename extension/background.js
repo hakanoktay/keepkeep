@@ -1,7 +1,7 @@
 // Background work the content script can't do itself because Instagram's CDN
 // is on a different origin: making thumbnails (downloads an image, crops it to
 // a square and returns a data: URL) and downloading posts.
-importScripts('app/whats-new.js'); // shouldShowWhatsNew, pagesToOpen
+importScripts('app/whats-new.js', 'downloads-db.js'); // shouldShowWhatsNew, pagesToOpen; KeepKeepDownloads
 
 const ALLOWED_HOSTS = /(^|\.)(cdninstagram\.com|fbcdn\.net)$/;
 
@@ -29,7 +29,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 const jobs = new Map(); // job id → tab id, for progress messages
 
-async function startDownload({ job, mode, files, force }, tabId) {
+// `groups`: the posts / stories the files belong to ({ key, url, username,
+// type, thumb, files: [index] }), recorded for the app's Downloads view.
+async function startDownload({ job, mode, files, force, groups }, tabId) {
   const allowed = (url) => {
     try {
       const u = new URL(url);
@@ -40,15 +42,18 @@ async function startDownload({ job, mode, files, force }, tabId) {
   };
   // A video's DASH files (up to 1080p) only from Instagram's CDN too; the audio may be missing.
   const dashOk = (d) => d && allowed(d.video?.url) && (d.audio == null || allowed(d.audio.url));
-  files = (files || []).filter(({ url }) => allowed(url)).map((f, index) => ({
-    index, id: typeof f.id === 'string' && /^\d{1,40}$/.test(f.id) ? f.id : null,
+  // `index`: the file's place in the page's list (progress messages use it).
+  files = (files || []).map((f, index) => ({ ...f, index })).filter(({ url }) => allowed(url)).map((f) => ({
+    index: f.index, id: typeof f.id === 'string' && /^\d{1,40}$/.test(f.id) ? f.id : null,
     url: f.url, fallback: allowed(f.fallback) ? f.fallback : null, filename: safeName(f.filename),
     ...(dashOk(f.dash) && { dash: f.dash }),
   }));
   if (!files.length) throw new Error('no files');
-  // Files saved before are skipped (shown as done in the card) unless `force`.
+  // Files saved before are skipped (shown as done in the card) unless `force`
+  // or the user turned it off (Downloads view: "Skip files downloaded before").
   const skipped = [];
-  if (!force) {
+  const { skipDownloaded } = await chrome.storage.local.get('skipDownloaded');
+  if (!force && skipDownloaded !== false) {
     const seen = await Promise.all(files.map((f) => savedBefore(f, mode).catch(() => null)));
     files = files.filter((f, i) => {
       if (!seen[i]) return true;
@@ -68,8 +73,9 @@ async function startDownload({ job, mode, files, force }, tabId) {
         url, filename: `KeepKeep/${filename}`, conflictAction: 'uniquify', saveAs: false,
       });
       const file = files.find((f) => f.index === index);
-      releaseWhenDone(id, url, () => file?.id && downloaded.put({ id: file.id, top: !!top, at: Date.now(), dl: id, name: filename }).catch(() => {}));
+      releaseWhenDone(id, url, () => file?.id && KeepKeepDownloads.putFile({ id: file.id, top: !!top, at: Date.now(), dl: id, name: filename }).catch(() => {}));
     }
+    recordPosts(groups, built.outputs.map((o) => o.index)).catch(() => {});
     return { ok: true, filenames: built.outputs.map((o) => o.filename), skipped };
   } finally {
     jobs.delete(job);
@@ -87,6 +93,25 @@ async function ensureHelper() {
     url: 'offscreen.html', reasons: ['BLOBS'], justification: 'Fetch Instagram media for download',
   }).finally(() => { helperReady = null; });
   await helperReady;
+}
+
+// The posts / stories with at least one file downloaded now, for the app's
+// Downloads view, with a small square picture (Instagram's addresses expire).
+async function recordPosts(groups, indexes) {
+  const got = new Set(indexes);
+  const instagram = (u) => { try { return new URL(u).hostname === 'www.instagram.com'; } catch { return false; } };
+  for (const g of Array.isArray(groups) ? groups : []) {
+    if (typeof g?.key !== 'string' || !/^(story:)?[\w-]{1,80}$/.test(g.key) || !instagram(g.url)) continue;
+    const files = (Array.isArray(g.files) ? g.files : []).filter(Number.isInteger);
+    if (!files.some((i) => got.has(i))) continue;
+    const before = await KeepKeepDownloads.post(g.key).catch(() => null);
+    const thumb = (g.thumb && await thumbnail(g.thumb, 240).catch(() => null)) || before?.thumb || null;
+    await KeepKeepDownloads.putPost({
+      key: g.key, url: g.url, username: typeof g.username === 'string' ? g.username : null,
+      type: ['post', 'story', 'highlight'].includes(g.type) ? g.type : 'post', files: files.length, at: Date.now(), thumb,
+    });
+  }
+  chrome.runtime.sendMessage({ type: 'downloads-changed' }).catch(() => {});
 }
 
 // The blob: URL has to stay valid until Chrome has written the file (including
@@ -109,31 +134,6 @@ function releaseWhenDone(downloadId, url, onComplete) {
 
 // ---- Files saved before (specs/2026-10-28-no-duplicate-downloads.md) ----
 //
-// KeepKeep's own record of every file it saved, by Instagram's id of the
-// photo / video: { id, top, at, dl, name }. In IndexedDB, not
-// chrome.storage: the pages listening to storage would re-render on every
-// file, and users' saved data stays untouched. Losing it only means files
-// are downloaded again.
-
-const downloaded = (() => {
-  let db = null;
-  const open = () => (db ||= new Promise((resolve, reject) => {
-    const req = indexedDB.open('keepkeep', 1);
-    req.onupgradeneeded = () => req.result.createObjectStore('downloaded', { keyPath: 'id' });
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => { db = null; reject(req.error); };
-  }));
-  const run = async (mode, fn) => {
-    const store = (await open()).transaction('downloaded', mode).objectStore('downloaded');
-    return new Promise((resolve, reject) => {
-      const req = fn(store);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  };
-  return { get: (id) => run('readonly', (s) => s.get(id)), put: (rec) => run('readwrite', (s) => s.put(rec)) };
-})();
-
 // Whether `file` was saved before and should be skipped: { at } or null
 // (download it). A file saved in a lower quality than is possible now is
 // downloaded again, and so is one Chrome reports as removed. Chrome's word
@@ -142,7 +142,7 @@ const downloaded = (() => {
 // claims the file is in the folder: the card says "Downloaded before".
 async function savedBefore(file, mode) {
   if (!file.id) return null;
-  const rec = await downloaded.get(file.id);
+  const rec = await KeepKeepDownloads.file(file.id);
   if (!rec) return null;
   const couldBeBetter = file.dash ? mode !== 'standard' : !!file.fallback;
   if (!rec.top && couldBeBetter) return null;

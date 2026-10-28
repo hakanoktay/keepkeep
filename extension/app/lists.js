@@ -14,7 +14,7 @@
     try { id = decodeURIComponent(location.hash.slice(1).split('/')[0]); } catch { id = 'media'; }
     if (id === 'profiles') return 'p';
     if (id === 'media') return 'm';
-    return document.querySelector(`.nav [data-view="${CSS.escape(id)}"]`) ? null : 'm'; // unknown ids fall back to Media
+    return KeepKeepApp.hasView(id) ? null : 'm'; // other views (Downloads, Settings…) have no lists; unknown ids fall back to Media
   };
   const records = () => (kind === 'p' ? state.profiles : state.media);
   const container = () => document.getElementById('lists');

@@ -39,8 +39,11 @@
     });
   }
 
-  async function bulkDownload(keys) {
-    const media = oneStoryPerOwner(keys.filter((k) => k.startsWith('m:')));
+  // `force` ("Download again" in the Downloads view): files downloaded before
+  // too, and each story key just that story.
+  async function bulkDownload(keys, { force = false } = {}) {
+    const wanted = keys.filter((k) => k.startsWith('m:'));
+    const media = force ? wanted : oneStoryPerOwner(wanted);
     if (!media.length) return;
     const tab = await pickTab();
     if (!tab) {
@@ -49,7 +52,7 @@
       return;
     }
     try {
-      const res = await chrome.tabs.sendMessage(tab.id, { type: 'download-keys', keys: media });
+      const res = await chrome.tabs.sendMessage(tab.id, { type: 'download-keys', keys: media, force });
       if (!res?.ok) throw new Error('no answer');
       showNotice(`Downloading ${res.started} ${res.started === 1 ? 'item' : 'items'} in your Instagram tab`, true);
     } catch {

@@ -162,23 +162,26 @@ var KeepKeepDrop = (() => {
     }
     // The app page asks for saved posts to be downloaded here (this tab has
     // the user's Instagram session). Answer at once; the work runs in the queue.
+    // `force` ("Download again" in the Downloads view): files downloaded
+    // before too, and a story key means just that story.
     if (msg?.type === 'download-keys') {
       const keys = (msg.keys || []).filter((k) => typeof k === 'string' && k.startsWith('m:')).map((k) => k.slice(2));
       sendResponse({ ok: true, started: keys.length });
-      queue = queue.then(() => downloadKeys(keys));
+      queue = queue.then(() => downloadKeys(keys, msg.force === true));
     }
   });
 
   // Requests run strictly one after another, with a pause between posts.
   let queue = Promise.resolve();
   const POST_GAP = 800;
-  async function downloadKeys(keys) {
+  async function downloadKeys(keys, force = false) {
     for (let i = 0; i < keys.length; i++) {
       if (i) await new Promise((r) => setTimeout(r, POST_GAP));
       const key = keys[i];
       try {
-        if (!key.startsWith('story:')) await download(key);
-        else if ((await KeepKeep.getMedia(key))?.type === 'highlight') await downloadHighlightItem(key.slice(6));
+        if (!key.startsWith('story:')) await download(key, undefined, force);
+        else if ((await KeepKeep.getMedia(key))?.type === 'highlight') await downloadStoryItem(key.slice(6), 'highlight', force);
+        else if (force) await downloadStoryItem(key.slice(6), 'story', true);
         else await downloadStory(key.slice(6));
       } catch { /* the balloon already says it failed */ }
     }
@@ -218,7 +221,7 @@ var KeepKeepDrop = (() => {
   // `only` picks one item of an album – the one on screen: { fileKey } (a
   // photo, matched by file name across sizes) or { index }. Its file keeps
   // the name it gets when the whole album is downloaded.
-  async function download(code, only) {
+  async function download(code, only, force = false) {
     const job = Math.random().toString(36).slice(2);
     const ui = KeepKeepPanel.downloads;
     ui.start(job);
@@ -229,8 +232,10 @@ var KeepKeepDrop = (() => {
       const stamp = compactTime(post.takenAt ? post.takenAt * 1000 : Date.now());
       const base = `${post.username || 'instagram'}_${stamp}`;
       const many = post.files.length > 1;
+      // The post, for the app's Downloads view.
+      const g = { key: code, url: `https://www.instagram.com/p/${code}/`, username: post.username, type: 'post', thumb: post.thumbUrl };
       let files = post.files.map((f, i) => ({
-        id: f.id, url: f.url, fallback: f.fallback, dash: f.dash, kind: f.kind, thumb: f.thumb,
+        g, id: f.id, url: f.url, fallback: f.fallback, dash: f.dash, kind: f.kind, thumb: f.thumb,
         filename: `${base}${many ? `_${i + 1}` : ''}.${extension(f)}`,
       }));
       if (only) {
@@ -239,7 +244,7 @@ var KeepKeepDrop = (() => {
           : files.filter((_, i) => i === only.index);
         if (files.length !== 1) throw new Error('item not found');
       }
-      await save(job, post.username, files, videoQuality);
+      await save(job, post.username, files, videoQuality, force);
       return true;
     } catch {
       ui.fail(job, "Couldn't download this post");
@@ -254,15 +259,16 @@ var KeepKeepDrop = (() => {
   // A whole highlight (/stories/highlights/<id>/), as <username>_<YYMMDDHHmm>_highlight.<ext>.
   const downloadHighlight = (id) => downloadStoryItems(() => InstaApi.highlight(id), 'highlight', "Couldn't download this highlight");
 
-  // One saved story from a highlight (from KeepKeep's own page).
-  const downloadHighlightItem = (pk) => downloadStoryItems(async () => {
+  // Just one story (from KeepKeep's own page): a saved story from a
+  // highlight, or "Download again" for one in the Downloads view.
+  const downloadStoryItem = (pk, suffix = 'story', force = false) => downloadStoryItems(async () => {
     const s = await InstaApi.story(pk);
     return { username: s.username, items: [{ takenAt: s.takenAt, files: s.files }] };
-  }, 'highlight', "Couldn't download this story");
+  }, suffix, "Couldn't download this story", force);
 
   // Saves story items – { username, items: [{ takenAt, files }] } from `load` –
   // one file each, named <username>_<YYMMDDHHmm>_<suffix>[_n].<ext>.
-  async function downloadStoryItems(load, suffix, failText) {
+  async function downloadStoryItems(load, suffix, failText, force = false) {
     const job = Math.random().toString(36).slice(2);
     const ui = KeepKeepPanel.downloads;
     ui.start(job);
@@ -273,15 +279,18 @@ var KeepKeepDrop = (() => {
       const files = [];
       const used = new Set();
       for (const it of reel.items) {
+        // Each story, for the app's Downloads view (its id is its file's).
+        const id = it.files[0]?.id;
+        const g = id ? { key: 'story:' + id, url: `https://www.instagram.com/stories/${user}/${id}/`, username: reel.username, type: suffix === 'highlight' ? 'highlight' : 'story', thumb: it.files[0].thumb } : null;
         for (const f of it.files) {
           let name = `${user}_${compactTime(it.takenAt ? it.takenAt * 1000 : Date.now())}_${suffix}`;
           for (let n = 2; used.has(name); n++) name = name.replace(/(_\d+)?$/, '') + '_' + n; // same minute
           used.add(name);
-          files.push({ id: f.id, url: f.url, dash: f.dash, kind: f.kind, thumb: f.thumb, filename: `${name}.${extension(f)}` });
+          files.push({ g, id: f.id, url: f.url, dash: f.dash, kind: f.kind, thumb: f.thumb, filename: `${name}.${extension(f)}` });
         }
       }
       if (!files.length) throw new Error('no files');
-      await save(job, reel.username, files, videoQuality);
+      await save(job, reel.username, files, videoQuality, force);
       return true;
     } catch {
       ui.fail(job, failText);
@@ -296,8 +305,11 @@ var KeepKeepDrop = (() => {
   async function save(job, username, files, videoQuality, force = false) {
     const ui = KeepKeepPanel.downloads;
     ui.items(job, { username, files });
+    // The posts / stories the files belong to (`g`), with their files' places.
+    const groups = [...new Set(files.map((f) => f.g).filter(Boolean))]
+      .map((g) => ({ ...g, files: files.flatMap((f, i) => (f.g === g ? [i] : [])) }));
     const res = await chrome.runtime.sendMessage({
-      type: 'download', job, mode: videoMode(videoQuality), force,
+      type: 'download', job, mode: videoMode(videoQuality), force, groups,
       files: files.map(({ id, url, fallback, dash, filename }) => ({ id, url, fallback, dash, filename })),
     });
     if (!res?.ok) throw new Error(res?.error || 'failed');

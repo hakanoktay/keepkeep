@@ -342,3 +342,16 @@ test('saved before in a lower quality: downloaded again when a better one is pos
   // …and now that it is in the best quality, a third time is skipped.
   await downloadAgain(context, 'Already downloaded');
 });
+
+test('a download is recorded for the app\'s Downloads view: the post, its owner, how many files', async ({ context, extensionId }) => {
+  const { ext } = await download(context, extensionId, { item: photoWithId });
+  await expect.poll(() => ext.evaluate(async () => (await KeepKeepDownloads.posts()).map(({ key, username, type, files }) => ({ key, username, type, files }))))
+    .toEqual([{ key: expect.any(String), username: 'alice', type: 'post', files: 1 }]);
+});
+
+test('with "Skip files downloaded before" off, the same photo is downloaded again', async ({ context, extensionId }) => {
+  const { ext } = await download(context, extensionId, { item: photoWithId });
+  await ext.evaluate(() => chrome.storage.local.set({ skipDownloaded: false }));
+  await downloadAgain(context, 'Saved to Downloads/KeepKeep');
+  await expect.poll(() => filesOnDisk(ext)).toBe(2);
+});

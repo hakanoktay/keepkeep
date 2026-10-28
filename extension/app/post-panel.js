@@ -4,8 +4,9 @@
 // Instagram, Remove. Stories and highlights have no embed: their saved
 // picture is shown instead. A profile card opens the profile the same way:
 // what KeepKeep has saved about it (picture, name, lists, the media saved
-// from it); a post opened from there has a way back. ← / → step through the
-// grid, Escape or × closes.
+// from it); a post opened from there has a way back. A card in Downloads
+// opens what was downloaded, with Download again and Save to Media. ← / →
+// step through the grid, Escape or × closes.
 (() => {
   const { el, icon, on, state } = KeepKeepApp;
   const saved = KeepKeepApp.saved;
@@ -18,6 +19,10 @@
   const media = (key) => state.media.find((m) => 'm:' + m.key === key);
   const profile = (key) => state.profiles.find((p) => 'p:' + p.username === key);
   const isProfileKey = (key) => String(key).startsWith('p:');
+  const isDownloadKey = (key) => String(key).startsWith('d:');
+  const download = (key) => KeepKeepApp.downloads?.find(key) || null;
+  // A download record shown like a media item (for the embed / still picture).
+  const asMedia = (d) => d && { key: d.key, code: d.key.startsWith('story:') ? null : d.key, thumb: d.thumb, url: d.url, username: d.username };
   const savedFrom = (username) => state.media.filter((m) => m.username === username).sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
   const isStory = (m) => String(m.key).startsWith('story:');
   // Posts and reels share one embed address, by shortcode.
@@ -124,8 +129,43 @@
       items.length ? grid : el('p', { class: 'peek-note', text: 'Nothing saved from this account yet.' }));
   }
 
+  // Something downloaded: when, how many files, Download again (even if
+  // downloaded before), Save to Media (or "In Media"), Open on Instagram.
+  function downloadHead(d) {
+    const inMedia = state.media.some((m) => m.key === d.key);
+    const when = new Date(d.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return el('div', { class: 'peek-head' },
+      el('div', { class: 'peek-top' },
+        el('div', { class: 'peek-who' },
+          el('b', { text: d.username ? '@' + d.username : 'Owner not found' }),
+          el('span', { class: 'peek-date', text: `Downloaded ${when} · ${d.files} ${d.files === 1 ? 'file' : 'files'}` })),
+        el('div', { class: 'peek-tools' },
+          d.key.startsWith('story:') ? null : el('button', { type: 'button', class: 'peek-close', title: 'View large (F)', 'aria-label': 'View large', onclick: () => showFull(true) }, icon('expand')),
+          el('button', { type: 'button', class: 'peek-close', title: 'Close (Esc)', 'aria-label': 'Close', onclick: close }, icon('close')))),
+      el('div', { class: 'peek-actions' },
+        el('button', { type: 'button', class: 'peek-btn', id: 'download-again', onclick: () => saved.bulkDownload?.(['m:' + d.key], { force: true }) }, icon('download'), 'Download again'),
+        el('button', { type: 'button', class: 'peek-btn', id: 'save-to-media', disabled: inMedia, onclick: () => saveToMedia(d) },
+          icon(inMedia ? 'check' : 'plus'), inMedia ? 'In Media' : 'Save to Media'),
+        d.url ? el('a', { class: 'peek-btn icon-only', href: d.url, target: '_blank', rel: 'noopener', title: 'Open on Instagram', 'aria-label': 'Open on Instagram' }, icon('open')) : null));
+  }
+
+  // Into the collection, from what the download record knows (owner, picture);
+  // the rest is filled in later by an open Instagram tab, as for any save.
+  async function saveToMedia(d) {
+    const item = KeepKeep.parse(d.url);
+    if (!item || item.kind !== 'media') return;
+    const { kind, ...rest } = item;
+    await KeepKeep.saveMedia({ ...rest, username: d.username || rest.username || null, ...(d.thumb && { thumb: d.thumb }),
+      ...(d.type === 'highlight' && { type: 'highlight' }), addedAt: Date.now(), lists: [] });
+  }
+
   function refreshHead() {
     if (!panel) return;
+    if (isDownloadKey(openKey)) {
+      const d = download(openKey);
+      if (d) panel.querySelector('.peek-head')?.replaceWith(downloadHead(d));
+      return;
+    }
     const item = isProfileKey(openKey) ? profile(openKey) : media(openKey);
     if (item) panel.querySelector('.peek-head')?.replaceWith(isProfileKey(openKey) ? profileHead(item) : head(item));
   }
@@ -174,11 +214,12 @@
   function showFull(on) {
     full?.remove();
     full = null;
-    const m = on && panel && media(openKey);
-    if (!m) return; // posts only
+    const m = on && panel && (media(openKey) || asMedia(download(openKey)));
+    if (!m || isStory(m)) return; // posts only
     full = el('div', { id: 'peek-full', role: 'dialog', 'aria-label': 'The post, large', onclick: (e) => { if (e.target === full) showFull(false); } },
       el('div', { class: 'peek-full-tools' },
-        el('button', { type: 'button', class: 'peek-full-btn', title: 'Download', 'aria-label': 'Download', onclick: () => saved.bulkDownload?.([openKey]) }, icon('download')),
+        el('button', { type: 'button', class: 'peek-full-btn', title: 'Download', 'aria-label': 'Download',
+          onclick: () => (isDownloadKey(openKey) ? saved.bulkDownload?.(['m:' + m.key], { force: true }) : saved.bulkDownload?.([openKey])) }, icon('download')),
         el('button', { type: 'button', class: 'peek-full-btn', title: 'Back (Esc)', 'aria-label': 'Back', onclick: () => showFull(false) }, icon('close'))),
       el('div', { class: 'peek-full-stage' }, body(m)));
     document.body.append(full);
@@ -194,7 +235,8 @@
   function open(key, keepFrom = false) {
     if (key === openKey) return close(); // clicking the open card again closes
     const isProfile = isProfileKey(key);
-    const m = isProfile ? profile(key) : media(key);
+    const isDownload = isDownloadKey(key);
+    const m = isProfile ? profile(key) : isDownload ? download(key) : media(key);
     if (!m) return;
     if (!keepFrom) from = null;
     const first = !panel;
@@ -206,7 +248,7 @@
     openKey = key;
     pickerOpen = false;
     document.body.classList.add('peek-open');
-    panel.replaceChildren(...(isProfile ? [profileHead(m), profileBody(m)] : [head(m), body(m)]));
+    panel.replaceChildren(...(isProfile ? [profileHead(m), profileBody(m)] : isDownload ? [downloadHead(m), body(asMedia(m))] : [head(m), body(m)]));
     if (full) showFull(!isProfile); // stepping with ← / → in the large view
     panel.classList.toggle('entering', first);
     markCard();
@@ -231,7 +273,9 @@
   // Previous / next card in the grid's order.
   function step(dir) {
     // A post opened from a profile steps through that profile's saved posts.
-    const keys = from ? savedFrom(profile(from)?.username).map((m) => 'm:' + m.key) : saved.keys().filter((k) => k[0] === openKey[0]);
+    const keys = from ? savedFrom(profile(from)?.username).map((m) => 'm:' + m.key)
+      : isDownloadKey(openKey) ? KeepKeepApp.downloads?.keys() || []
+      : saved.keys().filter((k) => k[0] === openKey[0]);
     const i = keys.indexOf(openKey);
     const next = keys[i + dir];
     if (i < 0 || !next) return;
@@ -241,6 +285,7 @@
   }
 
   saved.openItem = open;
+  on('downloads', () => { if (panel && isDownloadKey(openKey)) refreshHead(); });
 
   // A click elsewhere closes the list menu.
   document.addEventListener('click', (e) => {
@@ -264,7 +309,9 @@
   // Storage changed (a list toggled here or elsewhere, the item removed…).
   on('change', () => {
     if (!panel) return;
-    if (isProfileKey(openKey)) {
+    if (isDownloadKey(openKey)) {
+      refreshHead(); // "Save to Media" → "In Media"
+    } else if (isProfileKey(openKey)) {
       const p = profile(openKey);
       if (!p) return close();
       refreshHead();
@@ -281,7 +328,7 @@
     // The panel belongs to the grid it was opened from (a post opened from a
     // profile's panel stays while on Profiles).
     const home = from || openKey;
-    if (!home || view !== (isProfileKey(home) ? 'profiles' : 'media')) close();
+    if (!home || view !== (isProfileKey(home) ? 'profiles' : isDownloadKey(home) ? 'downloads' : 'media')) close();
     else markCard();
   });
 })();

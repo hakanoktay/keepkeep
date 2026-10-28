@@ -29,7 +29,7 @@ const KeepKeepApp = (() => {
   const DEFAULT_VIEW = 'media';
   const views = new Map();
   const handlers = {};
-  const state = { profiles: [], media: [], users: {}, lists: [] };
+  const state = { profiles: [], media: [], users: {}, lists: [], downloads: undefined }; // downloads: a count, set by app/downloads.js
   let main, loaded = false;
 
   function el(tag, attrs = {}, ...children) {
@@ -62,7 +62,7 @@ const KeepKeepApp = (() => {
     if (location.hash === hash) route(); else location.hash = hash;
   }
 
-  function counts() { return { media: state.media.length, profiles: state.profiles.length }; }
+  function counts() { return { media: state.media.length, profiles: state.profiles.length, downloads: state.downloads }; }
 
   function renderNav() {
     const current = main && main.dataset.view;
@@ -117,7 +117,7 @@ const KeepKeepApp = (() => {
       .finally(() => { loaded = true; route(); });
   }
 
-  return { view, go, state, on, emit, el, icon, start, route };
+  return { view, go, state, on, emit, el, icon, start, route, renderNav: () => loaded && renderNav(), hasView: (id) => views.has(id) };
 })();
 
 // Start once every view file has registered itself (scripts run before DOMContentLoaded fires).
