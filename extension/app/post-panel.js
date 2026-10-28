@@ -130,6 +130,28 @@
     if (item) panel.querySelector('.peek-head')?.replaceWith(isProfileKey(openKey) ? profileHead(item) : head(item));
   }
 
+  // Some accounts' posts are refused in Instagram's embed view (it shows
+  // "The link to this photo or video may be broken…" although the post is
+  // live; verified 2026-10-28: every post of such an account, while other
+  // accounts' posts embed fine). The refusal page carries "EmbedBrokenMedia".
+  // Checked once per post per session, alongside the iframe.
+  const refused = new Map(); // embed URL → Promise<boolean>
+  function isRefused(url) {
+    if (!refused.has(url)) {
+      refused.set(url, fetch(url, { credentials: 'omit' })
+        .then((r) => (r.ok ? r.text() : ''))
+        .then((html) => html.includes('EmbedBrokenMedia'))
+        .catch(() => false));
+    }
+    return refused.get(url);
+  }
+
+  function refusedView(m) {
+    return el('div', { class: 'peek-body peek-still' },
+      m.thumb ? el('img', { class: 'wide', src: m.thumb, alt: '' }) : null,
+      el('p', { class: 'peek-note', text: 'Instagram doesn\'t allow this post to be shown here. Open it on Instagram to see it.' }));
+  }
+
   function body(m) {
     if (isStory(m) || !(m.code || m.key)) {
       return el('div', { class: 'peek-body peek-still' },
@@ -142,6 +164,7 @@
     const frame = el('iframe', { class: 'peek-embed', src: embedUrl(m), title: 'The post on Instagram', loading: 'eager', allowfullscreen: true,
       onload: () => wrap.classList.remove('loading') });
     wrap.append(frame);
+    isRefused(frame.src).then((no) => { if (no && wrap.isConnected) wrap.replaceWith(refusedView(m)); });
     return wrap;
   }
 

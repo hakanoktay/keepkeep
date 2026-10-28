@@ -201,3 +201,21 @@ test('a profile card opens the profile: picture, name, lists, the media saved fr
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
 });
+
+// Some accounts' posts are refused in Instagram's embed view although they
+// are live: the panel shows the saved picture and a way to Instagram instead.
+test('a post Instagram refuses to embed: the saved picture and a note, not Instagram\'s error', async ({ context, extensionId }) => {
+  await context.route(/instagram\.com\/p\/AAA\/embed\/captioned\/$/, (route) => route.fulfill({ contentType: 'text/html',
+    body: '<html><body class="EmbedBrokenMedia"><p>The link to this photo or video may be broken, or the post may have been removed.</p></body></html>' }));
+  const page = await open(context, extensionId);
+  await page.click('.card[data-key="m:AAA"] .preview');
+  const panel = page.locator('#peek');
+  await expect(panel.locator('.peek-note')).toHaveText("Instagram doesn't allow this post to be shown here. Open it on Instagram to see it.");
+  await expect(panel.locator('.peek-embed')).toHaveCount(0);
+  await expect(panel.locator('a.peek-btn')).toHaveAttribute('href', 'https://www.instagram.com/p/AAA/');
+  // Another post still embeds.
+  await page.keyboard.press('ArrowRight');
+  await expect(panel.locator('.peek-embed')).toHaveAttribute('src', /\/p\/BBB\/embed\/captioned\/$/);
+  await page.waitForTimeout(300);
+  await expect(panel.locator('.peek-embed')).toHaveCount(1);
+});

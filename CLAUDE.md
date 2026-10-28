@@ -95,6 +95,12 @@ There is no build step; `extension/` is loaded unpacked as is.
   them; full-size profile pictures and the first-video-story case are on hold
   for that reason (`ROADMAP.md`, "On hold"). Many quick real-site checks in a
   row trigger 429s on the owner's account: keep real-site probes few.
+- **Refused embeds (2026-10-28):** some accounts' posts are refused in the
+  embed view (`/p/<code>/embed/…` answers 200 with "The link to this photo or
+  video may be broken…") although the post is live, signed in or not; every
+  post of such an account (e.g. taystecandi), while other accounts embed
+  fine. The page carries `EmbedBrokenMedia`; the app's side panel checks for it
+  and shows the saved picture with a note instead.
 - **Album dots:** buttons "Go to slide n"; the current one has
   `aria-current="step"`.
 - **Theme:** CSS variables (`--accent`, `--blue-5`, `--ig-primary-button`, …)
