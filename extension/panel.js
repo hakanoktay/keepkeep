@@ -566,6 +566,8 @@ var KeepKeepPanel = (() => {
   // Rows glide in and out and the card eases to its new height. The minimise
   // button folds the list away; the header then says how far it is.
 
+  const ROW_H = 52; // one file row
+  const SLOTS = 3; // file rows in the window
   const DL_STYLE = `
     :host { all: initial; }
     * { box-sizing: border-box; }
@@ -614,27 +616,34 @@ var KeepKeepPanel = (() => {
     /* The list: its height eases to the content; rows glide (see layout()). */
     .listbox { position: relative; overflow: hidden; border-top: 1px solid var(--secondary); transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s, border-color 0.25s; clip-path: inset(0 round 0 0 14px 14px); }
     .job.collapsed .listbox { opacity: 0; border-top-color: transparent; }
-    .items { position: relative; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
-    .row { border-radius: 10px; transition: opacity 0.3s, transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .items { position: relative; padding: 4px; display: flex; flex-direction: column; }
+    /* The files are one reel in a window of fixed rows; it slides up as files finish. */
+    .track { position: relative; overflow: hidden; flex: none; transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .reel { transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); }
+    .reel .item { height: ${ROW_H}px; }
+    .row { border-radius: 10px; transition: opacity 0.35s, transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .row.gone { display: none; }
     .row.waiting { opacity: 0.5; }
+    .row.away { opacity: 0; }
     .row.out { position: absolute; left: 4px; right: 4px; opacity: 0; transform: translateY(-14px) scale(0.97); pointer-events: none; }
     .row.in { opacity: 0; transform: translateY(10px); }
     .item { padding: 8px 10px; }
     .item:hover { background: var(--secondary); }
     .sumrow { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
-    .sumrow.saved { color: var(--text); }
+    .sumrow.saved { color: var(--text); height: 40px; }
     .sumrow.bad { color: var(--red); }
-    .sumrow .check { width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; padding: 3px; flex: none; }
+    .sumrow .check { width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; padding: 3px; flex: none; transition: background 0.25s; }
+    .sumrow.zero { color: var(--muted); }
+    .sumrow.zero .check { background: var(--secondary); color: transparent; }
     .sumrow .check.pop { animation: pop 0.25s ease-out; }
     .stackthumbs { display: flex; margin-left: auto; }
     .stackthumbs img, .stackthumbs .ph { width: 24px; height: 24px; border-radius: 6px; object-fit: cover; border: 2px solid var(--bg); margin-left: -8px; background: var(--secondary); box-sizing: content-box; }
     .stackthumbs :first-child { margin-left: 0; }
-    .sumrow.more { justify-content: center; font-weight: 500; font-size: 12px; padding: 4px 10px 6px; }
+    .sumrow.more { justify-content: center; font-weight: 500; font-size: 12px; padding: 4px 10px 6px; min-height: 28px; }
     /* Over one of KeepKeep's own buttons under the card: it fades and the click goes through. */
     .stack.through .job { opacity: 0.18; }
     .stack.through .job, .stack.through .job * { pointer-events: none; }
-    @media (prefers-reduced-motion: reduce) { .row, .listbox, .job { transition: none; animation: none; } }
+    @media (prefers-reduced-motion: reduce) { .row, .listbox, .job, .track, .reel { transition: none; animation: none; } }
   `;
   const DL_ICONS = {
     download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v12M7 10.5l5 5 5-5"/><path d="M4 16.5v2a2.5 2.5 0 0 0 2.5 2.5h11a2.5 2.5 0 0 0 2.5-2.5v-2"/></svg>',
@@ -642,7 +651,6 @@ var KeepKeepPanel = (() => {
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 9 9"/></svg>',
     chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
   };
-  const NEXT_SHOWN = 2; // rows after the one downloading
   let dlHost, dlStack;
   const dlJobs = new Map(); // job → { username, items: [file], finished, failed }
   let board = null; // the card: { card, header, box, list, savedRow, moreRow, files: [], peak, collapsed, saved, endTimer }
@@ -698,13 +706,16 @@ var KeepKeepPanel = (() => {
     const box = el('div', 'listbox');
     const list = el('div', 'items');
     const savedRow = el('div', 'row sumrow saved gone', `<span class="check">${ICONS.check}</span><span class="label"></span><span class="stackthumbs"></span>`);
+    const track = el('div', 'track');
+    const reel = el('div', 'reel');
+    track.append(reel);
     const moreRow = el('div', 'row sumrow more gone');
-    list.append(savedRow, moreRow);
+    list.append(savedRow, track, moreRow);
     box.append(list);
     box.style.height = '0px';
     card.append(header, box);
     dlStack.append(card);
-    board = { card, header, box, list, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: 0 };
+    board = { card, header, box, list, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1 };
     return board;
   }
 
@@ -749,66 +760,44 @@ var KeepKeepPanel = (() => {
     b.box.style.height = b.collapsed ? '0px' : `${b.list.offsetHeight}px`;
   }
 
-  // Which rows show: per post in order, the files not yet folded; across all,
-  // the first unfinished one and the next NEXT_SHOWN. Rows glide: the ones
-  // leaving fade up out of their place, the others move to their new places
-  // (FLIP), new ones rise in; the card eases to its new height.
+  // The files stay in their order on one reel behind a window of up to SLOTS
+  // rows: the first unfinished file sits at the top, the window's height is
+  // fixed, and finishing files only slide the reel up (no rows jump, appear
+  // or vanish in between). Above: "✓ n of N saved"; below: "+n more". Both
+  // are there from the start when the files don't all fit, so the card
+  // changes size only when another post joins.
   function layout() {
     const b = board;
     if (!b) return;
     const files = b.files.filter((f) => !f.job.failed);
+    const slots = Math.min(files.length, SLOTS);
     const open = files.findIndex((f) => !f.done);
-    const rows = [b.savedRow, ...b.files.map((f) => f.el), b.moreRow];
-    const before = new Map(rows.filter((r) => !r.classList.contains('gone')).map((r) => [r, r.offsetTop]));
-    let saved = 0, waiting = 0;
-    const want = new Map();
-    for (const f of b.files) {
-      const i = files.indexOf(f);
-      const show = f.job.failed ? false : f.done ? !!f.recent : open >= 0 && i <= open + NEXT_SHOWN;
-      if (!f.job.failed && f.done && !f.recent) saved++;
-      if (!f.job.failed && !f.done && !show) waiting++;
-      want.set(f.el, show);
-      f.el.classList.toggle('waiting', !f.done && i !== open);
-    }
-    want.set(b.savedRow, saved > 0);
-    want.set(b.moreRow, waiting > 0);
+    const start = Math.max(0, Math.min(open < 0 ? files.length : open, files.length - slots));
+    files.forEach((f, i) => {
+      f.el.classList.toggle('away', i < start || i >= start + slots);
+      f.el.classList.toggle('waiting', !f.done && !f.started);
+    });
+    b.track.style.height = `${slots * ROW_H}px`;
+    b.reel.style.transform = `translateY(${-start * ROW_H}px)`;
+    const many = files.length > slots;
+    b.savedRow.classList.toggle('gone', !many);
+    b.moreRow.classList.toggle('gone', !many);
+    const saved = files.filter((f) => f.done).length;
     if (saved !== b.saved) {
+      b.savedRow.classList.toggle('zero', !saved);
+      if (saved > b.saved && b.saved >= 0) {
+        const check = b.savedRow.querySelector('.check');
+        check.classList.remove('pop'); void check.offsetWidth; check.classList.add('pop');
+      }
       b.saved = saved;
-      b.savedRow.querySelector('.label').textContent = `${saved} saved`;
-      const check = b.savedRow.querySelector('.check');
-      check.classList.remove('pop'); void check.offsetWidth; check.classList.add('pop');
-      const pics = files.filter((f) => f.done && !f.recent).slice(-4).map((f) => (f.thumb
+      const pics = files.filter((f) => f.done).slice(-4).map((f) => (f.thumb
         ? Object.assign(document.createElement('img'), { src: f.thumb, alt: '', onerror() { this.replaceWith(el('span', 'ph')); } })
         : el('span', 'ph')));
       b.savedRow.querySelector('.stackthumbs').replaceChildren(...pics);
     }
-    if (waiting) b.moreRow.textContent = `+${waiting} more`;
-    // Leaving rows: lifted out of the flow at their place, then faded away.
-    for (const [r, show] of want) {
-      const shown = !r.classList.contains('gone') && !r.classList.contains('out');
-      if (shown && !show) {
-        r.style.top = `${r.offsetTop}px`;
-        r.classList.add('out');
-        setTimeout(() => { if (r.classList.contains('out')) { r.classList.remove('out'); r.classList.add('gone'); r.style.top = ''; } }, 320);
-      } else if (!shown && show) {
-        r.classList.remove('gone', 'out');
-        r.style.top = '';
-        r.classList.add('in');
-      }
-    }
-    // Staying rows move from where they were (FLIP).
-    for (const [r, top] of before) {
-      if (!want.get(r) || r.classList.contains('out')) continue;
-      const dy = top - r.offsetTop;
-      if (!dy) continue;
-      r.style.transition = 'none';
-      r.style.transform = `translateY(${dy}px)`;
-    }
-    void b.list.offsetHeight;
-    for (const r of rows) {
-      if (r.classList.contains('in')) requestAnimationFrame(() => r.classList.remove('in'));
-      if (r.style.transform) { r.style.transition = ''; r.style.transform = ''; }
-    }
+    b.savedRow.querySelector('.label').textContent = `${saved} of ${files.length} saved`;
+    const rest = files.length - start - slots;
+    b.moreRow.textContent = rest > 0 ? `+${rest} more` : '';
     fitHeight();
     headerText();
   }
@@ -852,7 +841,8 @@ var KeepKeepPanel = (() => {
         const row = bubble('row item gone', f.thumb, f.filename, 'Waiting…');
         if (!f.thumb) row.querySelector('.thumb').innerHTML = DL_ICONS[f.kind] || DL_ICONS.image;
         row.querySelector('.state').innerHTML = '<span class="pct"></span>';
-        board.list.insertBefore(row, board.moreRow);
+        row.classList.remove('gone');
+        board.reel.append(row);
         const it = { el: row, job: j, kind: f.kind, filename: f.filename, thumb: f.thumb, loaded: 0, total: 0, done: false };
         j.items.push(it);
         board.files.push(it);
@@ -867,6 +857,7 @@ var KeepKeepPanel = (() => {
     progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight } = {}) {
       const it = dlJobs.get(job)?.items[index];
       if (!it || it.done || !board) return;
+      if (!it.started) { it.started = true; it.el.classList.remove('waiting'); }
       Object.assign(it, { loaded, total: total || it.total });
       it.f = phase ? Math.min(1, Math.max(0, fraction || 0)) : it.total ? loaded / it.total : 0;
       it.el.querySelector('.bar').style.width = `${Math.round(it.f * 100)}%`;
@@ -874,9 +865,6 @@ var KeepKeepPanel = (() => {
         it.done = true;
         setText(it.el, null, fallbackHeight ? `${size(loaded)} · ${fallbackHeight}p` : size(loaded));
         markDone(it.el);
-        // Seen finishing (the ✓ pops), then it folds into "✓ n saved".
-        it.recent = true;
-        setTimeout(() => { it.recent = false; layout(); }, 900);
         layout();
       } else if (phase) {
         setText(it.el, null, phase === 'convert' ? `Converting ${Math.round(it.f * 100)}%` : 'Joining…');

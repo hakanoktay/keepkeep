@@ -1,6 +1,6 @@
-// The download card (panel.js): one card per download; the smart list never
-// scrolls (finished files fold into "✓ n saved", the one downloading and the
-// next two show, the rest wait in "+n more"); a button under it stays clickable.
+// The download card (panel.js): one card for all downloads; the files sit on a
+// reel behind a fixed window of three rows that slides up as files finish
+// ("✓ n of N saved" above, "+n more" below); a button under it stays clickable.
 const fs = require('fs');
 const path = require('path');
 const { test, expect } = require('./fixtures');
@@ -33,38 +33,37 @@ async function balloons(context, extensionId, n) {
   return { page, root };
 }
 
-const visibleNames = (root) => root('.bubble.item:not(.gone) .name').allTextContents();
+const visibleNames = (root) => root('.bubble.item:not(.away) .name').allTextContents();
 
 test('many files: the one downloading and the next two show, the rest wait in "+n more"; no scrolling', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 12);
   await page.waitForTimeout(400);
   expect(await visibleNames(root)).toEqual(['a_1.jpg', 'a_2.jpg', 'a_3.jpg']);
   await expect(root('.sumrow.more')).toHaveText('+9 more');
-  await expect(root('.sumrow.saved')).toBeHidden();
+  await expect(root('.sumrow.saved')).toHaveText('0 of 12 saved');
   expect(await root('.items').evaluate((l) => l.scrollHeight <= l.clientHeight)).toBe(true);
 });
 
-test('finished files fold into "✓ n saved"; the list moves up and keeps its size', async ({ context, extensionId }) => {
+test('finished files slide up into "✓ n of N saved"; the card keeps its size', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 12);
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(500);
   const h0 = (await root('.job').boundingBox()).height;
   await page.evaluate(() => { for (let i = 0; i < 3; i++) KeepKeepPanel.downloads.progress('j', i, 100, 100, true); });
-  // Just finished: still seen with its ✓ for a moment…
-  expect(await visibleNames(root)).toContain('a_1.jpg');
-  // …then folded away.
-  await expect(root('.sumrow.saved')).toHaveText('3 saved');
-  await expect.poll(() => visibleNames(root)).toEqual(['a_4.jpg', 'a_5.jpg', 'a_6.jpg']);
+  await expect(root('.sumrow.saved')).toHaveText('3 of 12 saved');
+  expect(await visibleNames(root)).toEqual(['a_4.jpg', 'a_5.jpg', 'a_6.jpg']);
   await expect(root('.sumrow.more')).toHaveText('+6 more');
+  await page.waitForTimeout(600);
   const h1 = (await root('.job').boundingBox()).height;
-  expect(Math.abs(h1 - h0)).toBeLessThan(50); // the "✓ n saved" row, nothing else
+  expect(Math.abs(h1 - h0)).toBeLessThan(1);
   expect(await root('.items').evaluate((l) => l.scrollHeight <= l.clientHeight)).toBe(true);
 });
 
-test('at the end: "✓ n saved" and no "more" row', async ({ context, extensionId }) => {
+test('at the end: "✓ n of N saved", the last files in the window, nothing more', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 6);
   await page.evaluate(() => KeepKeepPanel.downloads.finish('j', { filenames: Array.from({ length: 6 }, (_, i) => `a_${i + 1}.jpg`) }));
-  await expect(root('.sumrow.saved')).toHaveText('6 saved');
-  await expect(root('.sumrow.more')).toBeHidden();
+  await expect(root('.sumrow.saved')).toHaveText('6 of 6 saved');
+  expect(await visibleNames(root)).toEqual(['a_4.jpg', 'a_5.jpg', 'a_6.jpg']);
+  await expect(root('.sumrow.more')).toHaveText('');
 });
 
 test('a button under the balloons: they fade and the click goes through', async ({ context, extensionId }) => {
@@ -106,15 +105,38 @@ test('several posts: one card, "Downloading 2 posts", their files in one list', 
 test('the card keeps its size while files finish (no growing downwards)', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 12);
   await page.evaluate(() => KeepKeepPanel.downloads.progress('j', 0, 100, 100, true));
-  await page.waitForTimeout(1600); // "✓ 1 saved" row in, card settled
+  await page.waitForTimeout(600); // card settled
   const h0 = (await root('.job').boundingBox()).height;
   for (let i = 1; i < 8; i++) {
     await page.evaluate((i) => KeepKeepPanel.downloads.progress('j', i, 100, 100, true), i);
     await page.waitForTimeout(150);
   }
-  await page.waitForTimeout(1600);
+  await page.waitForTimeout(600);
   const h1 = (await root('.job').boundingBox()).height;
-  expect(Math.abs(h1 - h0)).toBeLessThan(2);
+  expect(Math.abs(h1 - h0)).toBeLessThan(1);
+});
+
+test('files keep their order: a row never jumps to another place', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 8);
+  const order = () => root('.reel .item .name').allTextContents();
+  const first = await order();
+  await page.evaluate(() => { const d = KeepKeepPanel.downloads; d.progress('j', 1, 100, 100, true); d.progress('j', 0, 50, 100, false); d.progress('j', 0, 100, 100, true); });
+  expect(await order()).toEqual(first);
+  expect(await visibleNames(root)).toEqual(['a_3.jpg', 'a_4.jpg', 'a_5.jpg']);
+});
+
+test('files finishing at once (already in the cache) never make the card grow', async ({ context, extensionId }) => {
+  const { page, root } = await balloons(context, extensionId, 20);
+  await page.waitForTimeout(500);
+  const h0 = (await root('.job').boundingBox()).height;
+  const heights = await page.evaluate(async () => {
+    const d = KeepKeepPanel.downloads;
+    const card = document.querySelector('#keepkeep-downloads').shadowRoot.querySelector('.job');
+    const hs = [];
+    for (let i = 0; i < 12; i++) { d.progress('j', i, 100, 100, true); hs.push(card.getBoundingClientRect().height); await new Promise((r) => setTimeout(r, 20)); }
+    return hs;
+  });
+  for (const h of heights) expect(Math.abs(h - h0)).toBeLessThan(1);
 });
 
 test('minimise: the files fold away, the header says how far the download is; again shows them', async ({ context, extensionId }) => {
