@@ -39,3 +39,18 @@ test('a new install starts with anonymous stories on', async ({ context, extensi
   await page.click('#settings');
   await expect(page.locator('#anon-stories')).toBeChecked();
 });
+
+test('the welcome says whether anonymous stories are on right now, and follows the setting', async ({ context, extensionId }) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/app.html#about`);
+  await page.evaluate(() => chrome.storage.local.set({ anonStories: false }));
+  await page.goto(`chrome-extension://${extensionId}/app.html#welcome`);
+  const note = page.locator('#anon-note');
+  await expect(note).toContainText('Anonymous stories are off.');
+  await page.click('#anon-on');
+  await expect(note).toContainText('Anonymous stories are on.');
+  expect(await page.evaluate(async () => (await chrome.storage.local.get('anonStories')).anonStories)).toBe(true);
+  // Turned off elsewhere (the popup, Instagram) while the welcome is open.
+  await page.evaluate(() => chrome.storage.local.set({ anonStories: false }));
+  await expect(note).toContainText('Anonymous stories are off.');
+});

@@ -61,6 +61,34 @@ test('popup Import opens the app settings', async ({ context, extensionId }) => 
   await expect(tab).toHaveURL(/app\.html#settings$/);
 });
 
+test('importing offers the backup\'s other settings; nothing changes until the user picks', async ({ context, extensionId }) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/app.html#settings`);
+  await page.evaluate(() => chrome.storage.local.set({ videoQuality: 'best', photoSize: 'original', anonStories: true }));
+  const backup = (settings) => ({ name: 'KeepKeep-backup-2026-10-29.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ format: 'keepkeep-backup', version: 1, lists: [], items: { 'p:zed': { username: 'zed', lists: [] } }, settings })) });
+  await page.setInputFiles('#import-file', backup({ videoQuality: 'standard', photoSize: 'original', anonStories: false }));
+  const offer = page.locator('#import-settings');
+  await expect(offer.locator('li')).toHaveText(['Video quality: Standard (here: Best)', 'Watch stories anonymously: Off (here: On)']);
+  await page.waitForTimeout(400);
+  await page.locator('#import-result').screenshot({ path: test.info().outputPath('import-settings.png') });
+  expect(await page.evaluate(async () => (await chrome.storage.local.get('videoQuality')).videoQuality)).toBe('best');
+  await page.click('#keep-settings');
+  await expect(offer).toHaveText('Your settings stay as they are.');
+  expect(await page.evaluate(() => chrome.storage.local.get(['videoQuality', 'anonStories']))).toEqual({ videoQuality: 'best', anonStories: true });
+  // Again, and this time use them: the settings above follow at once.
+  await page.setInputFiles('#import-file', backup({ videoQuality: 'standard', anonStories: false }));
+  await page.click('#use-backup-settings');
+  await expect(offer).toHaveText("The backup's settings are in use now.");
+  expect(await page.evaluate(() => chrome.storage.local.get(['videoQuality', 'anonStories']))).toEqual({ videoQuality: 'standard', anonStories: false });
+  await expect(page.locator('input[name=video-quality][value=standard]')).toBeChecked();
+  await expect(page.locator('#anon-stories')).not.toBeChecked();
+  // Same settings as here: nothing to offer.
+  await page.setInputFiles('#import-file', backup({ videoQuality: 'standard' }));
+  await expect(page.locator('#import-result')).toHaveText(/already here/);
+  await expect(offer).toHaveCount(0);
+});
+
 test('app Export saves a backup file', async ({ context, extensionId }) => {
   test.setTimeout(60_000); // chrome.downloads can be slow while the whole suite runs
   const page = await context.newPage();

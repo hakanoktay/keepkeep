@@ -303,6 +303,15 @@ body.dragging-card .lists .list:hover .count { display: inline; }
 .result.ok b { color: #3d9a14; }
 .result.bad b { color: var(--red); }
 @media (prefers-color-scheme: dark) { .result.ok b { color: #6fd43c; } }
+.import-settings { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.result .import-settings > b { color: var(--text); }
+.import-settings ul { margin: 6px 0 12px; padding-left: 18px; font-size: 14px; }
+.import-settings li { margin: 3px 0; }
+.result .import-settings li b { display: inline; margin: 0; color: var(--text); font-weight: 600; }
+.import-settings .choices { display: flex; gap: 8px; flex-wrap: wrap; }
+.import-settings .btn { height: 34px; padding: 0 16px; font-size: 13.5px; }
+.import-settings .btn.primary { background: var(--brand); color: var(--on-brand); }
+.import-settings .btn.primary:hover { background: var(--brand-hover); }
 
 .about { padding: 28px; border-radius: 18px; border: 1.5px solid var(--line); background: var(--elevated); }
 .about-head { display: flex; align-items: center; gap: 12px; font-size: 22px; }

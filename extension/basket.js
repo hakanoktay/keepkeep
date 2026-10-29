@@ -160,24 +160,99 @@ var KeepKeep = (() => {
     }
     const added = [result.profiles && plural(result.profiles, 'profile'), result.media && plural(result.media, 'post'), result.lists && plural(result.lists, 'list')].filter(Boolean);
     const already = result.existing ? `${plural(result.existing, 'item')} ${result.existing === 1 ? 'was' : 'were'} already here; their lists were combined.` : '';
-    if (!added.length) return { ok: true, title: 'Everything in this backup was already here.', text: already };
+    const left = result.skipped ? ` ${plural(result.skipped, 'item')} in the file couldn't be read and ${result.skipped === 1 ? 'was' : 'were'} left out.` : '';
+    if (!added.length) return { ok: true, title: 'Everything in this backup was already here.', text: (already + left).trim() };
     const list = added.length > 1 ? added.slice(0, -1).join(', ') + ' and ' + added.at(-1) : added[0];
-    return { ok: true, title: `Added ${list}.`, text: already || 'Open KeepKeep from the toolbar to see them.' };
+    return { ok: true, title: `Added ${list}.`, text: ((already || 'Open KeepKeep from the toolbar to see them.') + left).trim() };
+  }
+
+  // ---- A backup is a file from outside: everything in it is checked ----
+  // Only the fields KeepKeep itself writes are taken, each with its type;
+  // pictures only as data: images (never an address that would load something
+  // from the internet), links only to www.instagram.com. A record that can't
+  // be made valid is left out and counted.
+  const DATA_IMAGE = /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+  const MEDIA_KEY = /^(story:\d{1,40}|[\w-]{1,80})$/;
+  const time = (v) => (Number.isFinite(v) && v > 0 ? v : undefined);
+  const text = (v, max) => (typeof v === 'string' && v.length <= max ? v : undefined);
+  const image = (v) => (typeof v === 'string' && DATA_IMAGE.test(v) ? v : undefined);
+  const listIds = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.length <= 64) : []);
+  const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+  function instagramUrl(v) {
+    try {
+      const u = new URL(v);
+      return u.protocol === 'https:' && u.hostname === 'www.instagram.com' ? u.href : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  function cleanRecord(k, v) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    const id = k.slice(2);
+    if (k.startsWith('p:')) {
+      return USERNAME.test(id) ? { username: id, addedAt: time(v.addedAt) ?? Date.now(), lists: listIds(v.lists) } : null;
+    }
+    if (k.startsWith('u:')) {
+      return USERNAME.test(id) ? defined({ username: id, fullName: text(v.fullName, 200), pic: image(v.pic), triedAt: time(v.triedAt) }) : null;
+    }
+    if (!MEDIA_KEY.test(id)) return null;
+    const story = id.startsWith('story:');
+    const username = typeof v.username === 'string' && USERNAME.test(v.username) ? v.username : undefined;
+    const url = instagramUrl(v.url)
+      ?? (story ? username && `${BASE}stories/${username}/${id.slice(6)}/` : media(id, v.type === 'reel' ? 'reel' : 'post').url);
+    if (!url) return null;
+    return defined({
+      key: id, code: story ? null : id, url, type: text(v.type, 20), username, thumb: image(v.thumb),
+      addedAt: time(v.addedAt) ?? Date.now(), lists: listIds(v.lists), triedAt: time(v.triedAt), expiresAt: time(v.expiresAt),
+      highlightId: typeof v.highlightId === 'string' && /^\d{1,40}$/.test(v.highlightId) ? v.highlightId : undefined,
+    });
+  }
+
+  // Settings: the values each one can have, and what it is when never set.
+  const SETTING_VALUES = { photoSize: ['original', 'standard'], videoQuality: ['best', 'original', 'standard'], anonStories: [true, false], skipDownloaded: [true, false] };
+  const settingNow = {
+    photoSize: (v) => (v === 'standard' ? 'standard' : 'original'),
+    videoQuality: (v) => (v === 'original' || v === 'standard' ? v : 'best'),
+    anonStories: (v) => v === true,
+    skipDownloaded: (v) => v !== false,
+  };
+
+  // A backup's settings are this computer's choice: importing never sets them.
+  // It returns the ones that differ ({ key, theirs, ours }) so the page can
+  // offer them; applyBackupSettings() sets the ones the user accepts.
+  async function settingsToOffer(raw) {
+    if (!raw || typeof raw !== 'object') return [];
+    const here = await chrome.storage.local.get(SETTINGS);
+    return SETTINGS.filter((k) => SETTING_VALUES[k].includes(raw[k]) && raw[k] !== settingNow[k](here[k]))
+      .map((k) => ({ key: k, theirs: raw[k], ours: settingNow[k](here[k]) }));
+  }
+
+  async function applyBackupSettings(offered) {
+    const update = {};
+    for (const o of offered || []) if (SETTING_VALUES[o?.key]?.includes(o.theirs)) update[o.key] = o.theirs;
+    if (Object.keys(update).length) await chrome.storage.local.set(update);
   }
 
   // Adds a backup to what is stored here; nothing is ever deleted or replaced.
   // Lists are matched by kind and name, so importing twice adds nothing twice.
   // A profile or post that is already here keeps its data and gets the
-  // backup's lists added. This computer's settings stay as they are.
-  // Returns { profiles, media, lists, existing } (how many were added / already here).
+  // backup's lists added. Settings are only offered (settingsToOffer).
+  // Returns { profiles, media, lists, existing, skipped, settings }: how many
+  // were added / already here / left out, and the settings that differ.
   async function importData(backup) {
     if (backup?.format !== BACKUP || typeof backup.version !== 'number' || !backup.items || typeof backup.items !== 'object') {
       throw Object.assign(new Error('Not a KeepKeep backup'), { code: 'not-backup' });
     }
     if (backup.version > BACKUP_VERSION) throw Object.assign(new Error('Made by a newer KeepKeep'), { code: 'newer' });
 
-    const incoming = { lists: Array.isArray(backup.lists) ? backup.lists : [] };
-    for (const [k, v] of Object.entries(backup.items)) if (/^[pmu]:./.test(k) && v && typeof v === 'object') incoming[k] = v;
+    let skipped = 0;
+    const incoming = { lists: Array.isArray(backup.lists) ? backup.lists.filter((l) => l && typeof l === 'object') : [] };
+    for (const [k, v] of Object.entries(backup.items)) {
+      const record = /^[pmu]:./.test(k) ? cleanRecord(k, v) : null;
+      if (record) incoming[k] = record;
+      else skipped++;
+    }
     Object.assign(incoming, splitUpdate(incoming)); // a backup from before lists had a kind
 
     const all = await chrome.storage.local.get(null);
@@ -187,14 +262,14 @@ var KeepKeep = (() => {
     const ids = {}; // backup list id → list id here
     const counts = { profiles: 0, media: 0, lists: 0, existing: 0 };
     for (const l of incoming.lists) {
-      if (!l?.id || typeof l.name !== 'string' || !l.name.trim() || !['p', 'm'].includes(l.kind)) continue;
+      if (typeof l?.id !== 'string' || !l.id || l.id.length > 64 || typeof l.name !== 'string' || !l.name.trim() || !['p', 'm'].includes(l.kind)) continue;
       const here = lists.find((x) => same(x, l));
       if (here) {
         ids[l.id] = here.id;
         continue;
       }
       const id = lists.some((x) => x.id === l.id) ? Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : l.id;
-      lists.push({ id, name: l.name.trim(), kind: l.kind });
+      lists.push({ id, name: l.name.trim().slice(0, 40), kind: l.kind });
       ids[l.id] = id;
       counts.lists++;
     }
@@ -207,7 +282,7 @@ var KeepKeep = (() => {
         update[k] = { ...v, ...have }; // fills in what's missing here, e.g. a picture
         continue;
       }
-      const theirs = (v.lists || []).map((id) => ids[id]).filter(Boolean);
+      const theirs = v.lists.map((id) => ids[id]).filter(Boolean);
       if (have) {
         counts.existing++;
         update[k] = { ...v, ...have, lists: [...new Set([...(have.lists || []), ...theirs])] };
@@ -217,7 +292,7 @@ var KeepKeep = (() => {
       }
     }
     await chrome.storage.local.set(update);
-    return counts;
+    return { ...counts, skipped, settings: await settingsToOffer(backup.settings) };
   }
 
   function strip(item) {
@@ -337,6 +412,7 @@ var KeepKeep = (() => {
     getLists,
     exportData,
     importData,
+    applyBackupSettings,
     downloadBackup,
     describeImport,
     createList,

@@ -26,8 +26,14 @@ The toolbar icon's Import button opens this page.
   added. Something you already have keeps what it has, and gains the lists
   it has in the backup. Lists with the same name are joined, so importing the
   same file twice doubles nothing.
-- KeepKeep tells you what it added. If the file isn't a KeepKeep backup,
-  nothing is changed.
+- **Your settings are yours to choose.** If the backup's settings differ from
+  this computer's, KeepKeep shows them side by side ("Video quality: Standard
+  (here: Best)"): **Use the backup's** or **Keep mine**. Nothing changes until
+  you pick.
+- **Everything in the file is checked.** Only KeepKeep's own kinds of data are
+  taken; anything else, or anything that would load something from the
+  internet, is left out, and KeepKeep tells you how many items it left out.
+  If the file isn't a KeepKeep backup, nothing is changed.
 
 ## What's in a backup
 
@@ -35,10 +41,9 @@ The toolbar icon's Import button opens this page.
 | --- | --- |
 | Your saved profiles and posts, with their previews | The photos and videos you downloaded |
 | Your lists, in their order | The Downloads list |
+| Your settings | |
 
 ## Good to know
 
-- Your settings are written in the file too, but importing doesn't change
-  this computer's settings.
 - The file is yours: it is saved on your computer and goes nowhere else.
 - A backup made by a newer KeepKeep needs that version to import it.

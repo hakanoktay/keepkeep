@@ -17,6 +17,24 @@
     return s;
   }
 
+  // Says whether anonymous stories are on right now (on by default for new
+  // installs, but the welcome can be opened again from About after turning
+  // them off), and follows the setting while the page is open.
+  function anonNote() {
+    const note = el('p', { class: 'note', id: 'anon-note' });
+    const paint = (on) => note.replaceChildren(svg(MASK), on
+      ? el('span', {}, el('b', { text: 'Anonymous stories are on.' }), " You won't appear in viewers lists, and Instagram turns KeepKeep purple so you always know. Switch it off any time in KeepKeep's popup.")
+      : el('span', {}, el('b', { text: 'Anonymous stories are off.' }), ' Story owners see you in their viewers lists. ',
+        el('button', { type: 'button', class: 'link-btn', id: 'anon-on', onclick: () => chrome.storage.local.set({ anonStories: true }) }, 'Turn them on')));
+    chrome.storage.local.get('anonStories').then(({ anonStories }) => paint(anonStories === true));
+    const follow = (changes) => {
+      if (!note.isConnected) return chrome.storage.onChanged.removeListener(follow);
+      if ('anonStories' in changes) paint(changes.anonStories.newValue === true);
+    };
+    chrome.storage.onChanged.addListener(follow);
+    return note;
+  }
+
   function step(n, title, text) {
     return el('li', {}, el('span', { class: 'n', text: String(n) }), el('div', {}, el('b', { text: title }), el('span', { text }))); 
   }
@@ -30,8 +48,7 @@
         step(1, 'Open Instagram', 'on instagram.com, in this browser.'),
         step(2, 'Use the purple buttons', 'next to posts, reels, stories and profiles to save or download.'),
         step(3, 'Find everything in KeepKeep', 'click its icon in the toolbar. Pin it from the puzzle-piece menu to keep it in view.')),
-      el('p', { class: 'note' }, svg(MASK),
-        el('span', {}, el('b', { text: 'Anonymous stories are on.' }), " You won't appear in viewers lists, and Instagram turns KeepKeep purple so you always know. Switch it off any time in KeepKeep's popup.")),
+      anonNote(),
       el('div', { class: 'actions' },
         el('a', { class: 'cta', href: 'https://www.instagram.com/', text: 'Open Instagram' }),
         el('a', { class: 'settings-cta', href: '#settings', text: 'Settings' })),

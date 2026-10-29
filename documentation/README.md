@@ -49,14 +49,14 @@ review; "reviewed" = the owner went through it.
 
 ## Open points found while writing (for the owner)
 
-- `docs/privacy.html` says KeepKeep "keeps no record of what you downloaded":
-  no longer true since the Downloads list. It must be updated before 1.1.0
-  (also: the app's side panel shows Instagram's own post view).
-- Settings: both "Standard" and "Best" video quality say "(recommended)";
-  Best is the default.
-- Import doesn't apply the settings stored in a backup (documented as is).
-- The welcome page always says "Anonymous stories are on", even if they were
-  turned off before it is opened again from About.
+- Settings: both "Standard" and "Best" video quality say "(recommended)".
+  The owner asked for it earlier ("recommended 720p de olsun"); asked again
+  on 2026-10-29 whether to keep it.
+
+Done on 2026-10-29: the privacy policy (`docs/privacy.html`) describes the
+Downloads list, the side panel and backups; importing offers the backup's
+settings and checks every record; the welcome page says whether anonymous
+stories are on right now.
 
 `_sources/` holds raw notes collected from the code to write from; they are
 not published.

@@ -11,8 +11,8 @@ const DATA = {
     { id: 'p1', name: 'Designers', kind: 'p' },
     { id: 'l2', name: 'Travel', kind: 'm' },
   ],
-  'm:AAA': { key: 'AAA', code: 'AAA', type: 'post', username: 'alice', lists: ['l1', 'l2'], thumb: 'data:image/jpeg;base64,AAAA', addedAt: 1 },
-  'm:BBB': { key: 'BBB', code: 'BBB', type: 'reel', username: 'bob', lists: [], addedAt: 2 },
+  'm:AAA': { key: 'AAA', code: 'AAA', url: 'https://www.instagram.com/p/AAA/', type: 'post', username: 'alice', lists: ['l1', 'l2'], thumb: 'data:image/jpeg;base64,AAAA', addedAt: 1 },
+  'm:BBB': { key: 'BBB', code: 'BBB', url: 'https://www.instagram.com/reel/BBB/', type: 'reel', username: 'bob', lists: [], addedAt: 2 },
   'p:alice': { username: 'alice', lists: ['p1'], addedAt: 3 },
   'u:alice': { username: 'alice', pic: 'data:image/jpeg;base64,BBBB' },
   photoSize: 'standard',
@@ -43,18 +43,26 @@ test('export, clear everything, import: the same data comes back', async ({ cont
   const backup = await exported(page);
   expect(backup).toMatchObject({ format: 'keepkeep-backup', version: 1, lists: DATA.lists, settings: { photoSize: 'standard', anonStories: true } });
   await page.evaluate(() => chrome.storage.local.clear());
-  expect(await importIt(page, backup)).toEqual({ profiles: 1, media: 2, lists: 3, existing: 0 });
+  expect(await importIt(page, backup)).toEqual({
+    profiles: 1, media: 2, lists: 3, existing: 0, skipped: 0,
+    // Settings belong to this computer: the ones that differ are only offered.
+    settings: [{ key: 'photoSize', theirs: 'standard', ours: 'original' }, { key: 'anonStories', theirs: true, ours: false }],
+  });
   const all = await stored(page);
   for (const k of ['lists', 'm:AAA', 'm:BBB', 'p:alice', 'u:alice']) expect(all[k]).toEqual(DATA[k]);
-  // Settings belong to this computer: an import doesn't set them.
   expect(all.photoSize).toBeUndefined();
+  // Accepted: exactly the offered settings are set.
+  await page.evaluate((s) => KeepKeep.applyBackupSettings(s), [{ key: 'photoSize', theirs: 'standard' }, { key: 'videoQuality', theirs: 'ultra' }]);
+  const after = await stored(page);
+  expect(after.photoSize).toBe('standard');
+  expect(after.videoQuality).toBeUndefined();
 });
 
 test('importing the same backup twice adds nothing twice', async ({ context, extensionId }) => {
   const page = await extensionPage(context, extensionId);
   const backup = await exported(page);
   const before = await stored(page);
-  expect(await importIt(page, backup)).toEqual({ profiles: 0, media: 0, lists: 0, existing: 3 });
+  expect(await importIt(page, backup)).toEqual({ profiles: 0, media: 0, lists: 0, existing: 3, skipped: 0, settings: [] });
   expect(await stored(page)).toEqual(before);
 });
 
@@ -72,7 +80,7 @@ test('importing into a filled KeepKeep merges lists and items, deleting nothing'
       photoSize: 'original',
     });
   });
-  expect(await importIt(page, backup)).toEqual({ profiles: 1, media: 1, lists: 2, existing: 1 });
+  expect(await importIt(page, backup)).toMatchObject({ profiles: 1, media: 1, lists: 2, existing: 1, skipped: 0 });
   const all = await stored(page);
   // Same-named list matched; "Recipes" is new but its id l1 was taken here.
   const recipes = all.lists.find((l) => l.name === 'Recipes');
@@ -103,11 +111,44 @@ test('a backup with 1.0.0-style shared lists is split like stored data', async (
     lists: [{ id: 'o1', name: 'Fav' }],
     items: { 'p:dan': { username: 'dan', lists: ['o1'] }, 'm:DDD': { key: 'DDD', lists: ['o1'] } },
   };
-  expect(await importIt(page, old)).toEqual({ profiles: 1, media: 1, lists: 2, existing: 0 });
+  expect(await importIt(page, old)).toMatchObject({ profiles: 1, media: 1, lists: 2, existing: 0, skipped: 0 });
   const all = await stored(page);
   expect(all.lists).toEqual([{ id: 'o1', name: 'Fav', kind: 'm' }, { id: 'o1-p', name: 'Fav', kind: 'p' }]);
   expect(all['p:dan'].lists).toEqual(['o1-p']);
   expect(all['m:DDD'].lists).toEqual(['o1']);
+});
+
+// A backup is a file from outside: anything in it that KeepKeep didn't write
+// itself, or that could load something from the internet, is left out.
+test('a tampered backup: only valid records and fields get in, nothing loads from the internet', async ({ context, extensionId }) => {
+  const page = await extensionPage(context, extensionId, {});
+  const result = await importIt(page, {
+    format: 'keepkeep-backup', version: 1,
+    lists: [null, 'x', { id: 'ok', name: 'A'.repeat(60), kind: 'm' }, { id: 7, name: 'Bad id', kind: 'm' }, { id: 'k', name: 'Bad kind', kind: 'z' }],
+    items: {
+      'm:GOOD': { key: 'OTHER', url: 'javascript:alert(1)', thumb: 'https://tracker.example/pixel.gif', username: 'eve', lists: ['ok', 5], extra: 'dropped', addedAt: 'soon', highlightId: 12 },
+      'm:story:123': { url: 'https://evil.example/', username: 'dora', thumb: 'data:image/png;base64,iVBORw0KGgo=' },
+      'm:../x': { url: 'https://www.instagram.com/p/x/' },
+      'm:story:456': { username: 'not a name!' },
+      'p:Bad Name': { username: 'Bad Name' },
+      'p:frank': { username: 'someone-else', lists: 'ok' },
+      'u:eve': { username: 'eve', fullName: 'Eve', pic: 'http://tracker.example/me.jpg' },
+      'x:other': { a: 1 },
+      'm:NULL': null,
+    },
+    settings: { photoSize: 'huge', videoQuality: 'original', anonStories: 'yes' },
+  });
+  expect(result).toMatchObject({ profiles: 1, media: 2, lists: 1, skipped: 5 });
+  expect(result.settings).toEqual([{ key: 'videoQuality', theirs: 'original', ours: 'best' }]);
+  const all = await stored(page);
+  expect(all.lists).toEqual([{ id: 'ok', name: 'A'.repeat(40), kind: 'm' }]);
+  const good = all['m:GOOD'];
+  expect(good).toEqual({ key: 'GOOD', code: 'GOOD', url: 'https://www.instagram.com/p/GOOD/', username: 'eve', lists: ['ok'], addedAt: good.addedAt });
+  expect(good.addedAt).toBeGreaterThan(1e12);
+  expect(all['m:story:123']).toMatchObject({ key: 'story:123', code: null, url: 'https://www.instagram.com/stories/dora/123/', thumb: 'data:image/png;base64,iVBORw0KGgo=' });
+  expect(all['p:frank']).toMatchObject({ username: 'frank', lists: [] });
+  expect(all['u:eve']).toEqual({ username: 'eve', fullName: 'Eve' });
+  for (const k of ['m:../x', 'm:story:456', 'p:Bad Name', 'x:other', 'm:NULL']) expect(all[k]).toBeUndefined();
 });
 
 test('popup Export saves a backup file to Downloads/KeepKeep', async ({ context, extensionId }) => {

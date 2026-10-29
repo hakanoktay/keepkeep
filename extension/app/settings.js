@@ -32,14 +32,44 @@
       el('span', { class: 'text' }, el('b', { text: title }), el('span', { class: 'desc', text: desc })));
   }
 
+  // The settings a backup can carry, in words.
+  const SETTING_WORDS = {
+    photoSize: ['Photo size', { original: 'Original', standard: 'Standard' }],
+    videoQuality: ['Video quality', { best: 'Best', original: 'Original', standard: 'Standard' }],
+    anonStories: ['Watch stories anonymously', { true: 'On', false: 'Off' }],
+    skipDownloaded: ['Skip files downloaded before', { true: 'On', false: 'Off' }],
+  };
+
+  // A backup's settings that differ from this computer's are offered, never
+  // set by themselves: the user picks the backup's or keeps their own.
+  function settingsOffer(offered) {
+    const box = el('div', { class: 'import-settings', id: 'import-settings' });
+    const done = (text) => box.replaceChildren(el('span', { class: 'done', text }));
+    box.append(
+      el('b', { text: offered.length === 1 ? 'This backup has another setting' : 'This backup has other settings' }),
+      el('ul', {}, ...offered.map(({ key, theirs, ours }) => {
+        const [name, words] = SETTING_WORDS[key];
+        return el('li', {}, `${name}: `, el('b', { text: words[theirs] }), el('span', { class: 'here', text: ` (here: ${words[ours]})` }));
+      })),
+      el('div', { class: 'choices' },
+        el('button', { type: 'button', class: 'btn primary', id: 'use-backup-settings', onclick: async () => {
+          await KeepKeep.applyBackupSettings(offered);
+          done(offered.length === 1 ? "The backup's setting is in use now." : "The backup's settings are in use now.");
+        } }, "Use the backup's"),
+        el('button', { type: 'button', class: 'btn quiet', id: 'keep-settings', onclick: () => done('Your settings stay as they are.') }, 'Keep mine')));
+    return box;
+  }
+
   async function importFile(file, drop, input, result) {
     if (!file) return;
     drop.classList.add('busy');
-    let outcome;
+    let outcome, offered = [];
     try {
       let backup;
       try { backup = JSON.parse(await file.text()); } catch { throw Object.assign(new Error(), { code: 'not-backup' }); }
-      outcome = KeepKeep.describeImport(await KeepKeep.importData(backup));
+      const counts = await KeepKeep.importData(backup);
+      outcome = KeepKeep.describeImport(counts);
+      offered = counts.settings || [];
     } catch (e) {
       outcome = KeepKeep.describeImport(e instanceof Error ? e : new Error());
     }
@@ -47,7 +77,7 @@
     input.value = '';
     result.hidden = false;
     result.className = `result ${outcome.ok ? 'ok' : 'bad'}`;
-    result.replaceChildren(el('b', { text: outcome.title }), el('span', { text: outcome.text }));
+    result.replaceChildren(el('b', { text: outcome.title }), el('span', { text: outcome.text }), offered.length ? settingsOffer(offered) : '');
   }
 
   function renderSettings(main) {
