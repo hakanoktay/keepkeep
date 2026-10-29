@@ -210,7 +210,9 @@ test('a post Instagram refuses to embed: the saved picture and a note, not Insta
   const page = await open(context, extensionId);
   await page.click('.card[data-key="m:AAA"] .preview');
   const panel = page.locator('#peek');
-  await expect(panel.locator('.peek-note')).toHaveText("Instagram doesn't allow this post to be shown here. Open it on Instagram to see it.");
+  await expect(panel.locator('.peek-warn')).toHaveText("Instagram doesn't allow this post to be shown here. Open it on Instagram to see it.");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: test.info().outputPath('refused.png') });
   await expect(panel.locator('.peek-embed')).toHaveCount(0);
   await expect(panel.locator('a.peek-btn')).toHaveAttribute('href', 'https://www.instagram.com/p/AAA/');
   // Another post still embeds.

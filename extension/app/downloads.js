@@ -77,18 +77,18 @@
     chrome.storage.local.get('skipDownloaded').then(({ skipDownloaded }) => { skip.checked = skipDownloaded !== false; });
     const forget = el('div', { class: 'forget' });
     const ask = () => forget.replaceChildren(
-      el('span', { text: 'Forget everything KeepKeep downloaded? Your files stay where they are.' }),
+      el('span', { text: 'Forget this list? Your files stay.' }),
       el('button', { type: 'button', class: 'btn danger', id: 'forget-yes', onclick: async () => { await KeepKeepDownloads.forget(); idle(); load(); } }, 'Forget'),
       el('button', { type: 'button', class: 'btn quiet', onclick: idle }, 'Cancel'));
     const idle = () => forget.replaceChildren(countLine,
       el('button', { type: 'button', class: 'link-btn', id: 'forget', onclick: ask }, 'Forget'));
     idle();
-    return el('div', { class: 'downloads-head' }, goodToKnow(),
+    return [el('div', { class: 'downloads-title' }, el('h1', { text: 'Downloads' }), forget), el('div', { class: 'downloads-head' },
       el('label', { class: 'setting-toggle' },
         el('span', { class: 'text' }, el('b', { text: 'Skip files downloaded before' }),
           el('span', { class: 'desc', text: "KeepKeep remembers what it downloaded and doesn't save it again, so your folder gets no copies. \"Download again\" always saves it anyway." })),
         skip),
-      forget);
+      goodToKnow())];
   }
 
   view({
@@ -109,7 +109,7 @@
         if (e.metaKey || e.ctrlKey || e.shiftKey) { if (r) window.open(r.url, '_blank', 'noopener'); return; }
         KeepKeepApp.saved.openItem?.(c.dataset.key);
       });
-      main.append(el('h1', { text: 'Downloads' }), controls(), toolbar, grid, empty);
+      main.append(...controls(), toolbar, grid, empty);
       load();
     },
   });

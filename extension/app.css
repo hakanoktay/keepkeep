@@ -9,6 +9,7 @@
   --brand-gradient: linear-gradient(135deg, #8119b5 0%, #6a139a 55%, #450b62 100%);
   --on-brand: #fff; --page: linear-gradient(160deg, #fbf7fd 0%, #f3e8fa 55%, #ead9f6 100%);
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --warn: #9a5b00; --warn-tint: #fff6e5; --warn-line: #f3d9a4;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -18,6 +19,7 @@
     --brand: #aa56d5; --brand-hover: #c07fe0; --brand-tint: rgba(170, 86, 213, 0.14); --brand-tint-strong: rgba(170, 86, 213, 0.24);
     --page: linear-gradient(160deg, #0d0812 0%, #160b1f 60%, #1f0e2c 100%);
     --shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+    --warn: #f2bd5c; --warn-tint: rgba(242, 189, 92, 0.1); --warn-line: rgba(242, 189, 92, 0.3);
   }
 }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
@@ -423,6 +425,8 @@ main[data-view=welcome], main[data-view=whats-new] { display: grid; place-items:
 .peek-still img { max-width: 100%; max-height: 70vh; border-radius: 12px; }
 .peek-still img.wide { width: 100%; object-fit: contain; }
 .peek-note { margin: 0; color: var(--muted); font-size: 13px; text-align: center; }
+.peek-warn { display: flex; gap: 10px; align-items: flex-start; width: 100%; margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--warn-tint); border: 1px solid var(--warn-line); color: var(--text); font-size: 13.5px; line-height: 1.45; }
+.peek-warn svg { flex: none; width: 18px; height: 18px; margin-top: 1px; fill: none; stroke: var(--warn); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .grid .card.peeking { box-shadow: 0 0 0 2px var(--brand), 0 10px 30px rgba(69, 11, 98, 0.18); }
 body.peek-open #bulk-dock { right: min(440px, 100vw); }
 /* Panel: the post's lists (only its own), "+ Add to list" and its menu */
@@ -500,9 +504,10 @@ body.peek-open #notice { right: calc(min(440px, 100vw) + 24px); }
 .peek-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* ---- Downloads (app/downloads.js): what KeepKeep downloaded ---- */
+.downloads-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; max-width: 720px; margin-bottom: 24px; }
+.downloads-title h1 { margin: 0; }
 .downloads-head { max-width: 720px; margin: -8px 0 22px; }
-.downloads-head .setting-toggle { margin-bottom: 8px; }
-.good-to-know { margin-bottom: 12px; padding: 0 16px; border-radius: 12px; background: var(--brand-tint); border: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.good-to-know { margin-top: 12px; padding: 0 16px; border-radius: 12px; background: var(--brand-tint); border: 1px solid var(--line); font-size: 14px; color: var(--muted); }
 .good-to-know summary { display: flex; align-items: center; gap: 10px; min-height: 46px; cursor: pointer; list-style: none; user-select: none; }
 .good-to-know summary::-webkit-details-marker { display: none; }
 .good-to-know summary svg { flex: none; width: 20px; height: 20px; color: var(--brand); }
@@ -513,8 +518,8 @@ body.peek-open #notice { right: calc(min(440px, 100vw) + 24px); }
 .good-to-know li { margin-top: 8px; line-height: 1.45; }
 .good-to-know li:first-child { margin-top: 0; }
 .good-to-know li b { color: var(--text); font-weight: 600; }
-.downloads-head .forget { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 34px; padding: 0 4px; color: var(--muted); font-size: 13.5px; }
-.downloads-head .btn { height: 32px; padding: 0 14px; font-size: 13px; }
+.downloads-title .forget { display: flex; align-items: center; justify-content: flex-end; gap: 10px; white-space: nowrap; min-height: 34px; text-align: right; color: var(--muted); font-size: 13.5px; }
+.downloads-title .btn { height: 32px; padding: 0 14px; font-size: 13px; }
 .btn.danger { background: var(--red, #ed4956); color: #fff; }
 .btn.danger:hover { filter: brightness(1.08); background: var(--red, #ed4956); }
 .link-btn { border: 0; padding: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; cursor: pointer; }

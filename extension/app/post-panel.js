@@ -189,8 +189,15 @@
   function refusedView(m) {
     return el('div', { class: 'peek-body peek-still' },
       m.thumb ? el('img', { class: 'wide', src: m.thumb, alt: '' }) : null,
-      el('p', { class: 'peek-note', text: 'Instagram doesn\'t allow this post to be shown here. Open it on Instagram to see it.' }));
+      el('p', { class: 'peek-warn', role: 'note' }, warnIcon(),
+        el('span', { text: 'Instagram doesn\'t allow this post to be shown here. Open it on Instagram to see it.' })));
   }
+  const warnIcon = () => {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.innerHTML = '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/>';
+    return s;
+  };
 
   function body(m) {
     if (isStory(m) || !(m.code || m.key)) {

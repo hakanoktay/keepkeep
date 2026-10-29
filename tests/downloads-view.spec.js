@@ -68,7 +68,7 @@ test('the switch turns skipping off; Forget clears the list after asking', async
   await expect(page.locator('#skip-downloaded')).toBeChecked(); // on unless turned off
   await page.locator('.setting-toggle:has(#skip-downloaded)').click();
   await expect.poll(() => page.evaluate(async () => (await chrome.storage.local.get('skipDownloaded')).skipDownloaded)).toBe(false);
-  await expect(page.locator('.downloads-head .count-line')).toHaveText('2 downloaded');
+  await expect(page.locator('.downloads-title .count-line')).toHaveText('2 downloaded');
   await page.click('#forget');
   await page.click('#forget-yes');
   await expect(page.locator('.grid .card')).toHaveCount(0);
@@ -83,6 +83,15 @@ test('a "Good to know" note says what KeepKeep can\'t do; folding it is remember
   await expect(note.locator('li')).toHaveCount(4);
   await expect(note).toContainText("KeepKeep can't see your Downloads folder.");
   await page.screenshot({ path: test.info().outputPath('downloads.png') });
+  // The count and Forget sit on the title's line, at the right edge of the switch's box.
+  const [title, sw, fg] = await Promise.all(['h1', '.downloads-head .setting-toggle', '#forget'].map((s) => page.locator(s).boundingBox()));
+  expect(Math.abs(fg.y + fg.height / 2 - (title.y + title.height / 2))).toBeLessThan(4);
+  expect(Math.abs(fg.x + fg.width - (sw.x + sw.width))).toBeLessThan(2);
+  expect(await page.evaluate(() => document.querySelector('.setting-toggle').compareDocumentPosition(document.querySelector('#good-to-know')) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
+  await page.click('#forget');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: test.info().outputPath('forget.png') });
+  await page.click('text=Cancel');
   await note.locator('summary').click();
   await expect(note).not.toHaveAttribute('open', '');
   await page.reload();
