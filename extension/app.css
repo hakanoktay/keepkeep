@@ -502,6 +502,17 @@ body.peek-open #notice { right: calc(min(440px, 100vw) + 24px); }
 /* ---- Downloads (app/downloads.js): what KeepKeep downloaded ---- */
 .downloads-head { max-width: 720px; margin: -8px 0 22px; }
 .downloads-head .setting-toggle { margin-bottom: 8px; }
+.good-to-know { margin-bottom: 12px; padding: 0 16px; border-radius: 12px; background: var(--brand-tint); border: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.good-to-know summary { display: flex; align-items: center; gap: 10px; min-height: 46px; cursor: pointer; list-style: none; user-select: none; }
+.good-to-know summary::-webkit-details-marker { display: none; }
+.good-to-know summary svg { flex: none; width: 20px; height: 20px; color: var(--brand); }
+.good-to-know summary b { color: var(--text); font-weight: 600; }
+.good-to-know summary::after { content: ''; margin-left: auto; width: 7px; height: 7px; border: solid var(--muted); border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); transition: transform 0.2s ease; }
+.good-to-know[open] summary::after { transform: translateY(2px) rotate(-135deg); }
+.good-to-know ul { margin: 0; padding: 0 0 14px 30px; list-style: none; }
+.good-to-know li { margin-top: 8px; line-height: 1.45; }
+.good-to-know li:first-child { margin-top: 0; }
+.good-to-know li b { color: var(--text); font-weight: 600; }
 .downloads-head .forget { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 34px; padding: 0 4px; color: var(--muted); font-size: 13.5px; }
 .downloads-head .btn { height: 32px; padding: 0 14px; font-size: 13px; }
 .btn.danger { background: var(--red, #ed4956); color: #fff; }

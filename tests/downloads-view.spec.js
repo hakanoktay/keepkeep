@@ -75,3 +75,16 @@ test('the switch turns skipping off; Forget clears the list after asking', async
   await expect(page.locator('.empty')).toHaveText('Nothing downloaded yet. Posts and stories you download appear here.');
   expect(await page.evaluate(async () => (await KeepKeepDownloads.posts()).length)).toBe(0);
 });
+
+test('a "Good to know" note says what KeepKeep can\'t do; folding it is remembered', async ({ context, extensionId }) => {
+  const page = await open(context, extensionId, POSTS);
+  const note = page.locator('#good-to-know');
+  await expect(note).toHaveAttribute('open', '');
+  await expect(note.locator('li')).toHaveCount(4);
+  await expect(note).toContainText("KeepKeep can't see your Downloads folder.");
+  await page.screenshot({ path: test.info().outputPath('downloads.png') });
+  await note.locator('summary').click();
+  await expect(note).not.toHaveAttribute('open', '');
+  await page.reload();
+  await expect(page.locator('#good-to-know')).not.toHaveAttribute('open', '');
+});

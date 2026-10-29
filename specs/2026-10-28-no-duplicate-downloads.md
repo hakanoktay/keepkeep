@@ -74,3 +74,13 @@ files"). It is a history, not a collection: no lists, no dragging.
   `chrome.storage.local`, in backups; on unless `false`) and **Forget** (asks
   first; clears both stores, files stay where they are). Settings → Downloads
   points here.
+- **Good to know** (2026-10-29, owner's request): a note on top of the view
+  saying the limits plainly, so a limit isn't taken for a bug: KeepKeep can't
+  see the folder (deleted / moved / renamed files still count; Download
+  again), only downloads from 1.1.0 on are listed, the list stays in this
+  browser (not in Backup), a post removed from Instagram can't be downloaded
+  again. Open until folded; folding is remembered in `localStorage`.
+- **Not done: listing earlier downloads from Chrome's history** (discussed
+  2026-10-29). File names give owner and date but no post code (no link, no
+  Download again), pictures can't be read from disk, and history can be
+  cleared. The owner judged it not worth the effort for a new extension.

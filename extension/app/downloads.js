@@ -51,6 +51,27 @@
     KeepKeepApp.emit('downloads');
   }
 
+  // What KeepKeep can't do here, said up front so a limit isn't taken for a bug
+  // (specs/2026-10-28-no-duplicate-downloads.md). Open until the user folds it;
+  // that choice is remembered in this browser only.
+  const FOLDED = 'keepkeep.downloads.goodToKnow.folded';
+  const LIMITS = [
+    ["KeepKeep can't see your Downloads folder.", "Chrome doesn't let extensions look at your files, so KeepKeep remembers what it downloaded, not what is still there. A file you deleted, moved or renamed still counts as downloaded: open it here and use Download again."],
+    ['Only downloads from this version on are listed.', 'What you downloaded earlier is still in your folder, just not in this list.'],
+    ['This list stays in this browser.', "It isn't part of Backup and doesn't move to another computer. Forget, or removing KeepKeep, empties it; your files stay."],
+    ['A post removed from Instagram is gone.', "If its owner deletes it or hides it from you, it can't be downloaded again; the files you already have stay yours."],
+  ];
+  function goodToKnow() {
+    let folded = false;
+    try { folded = localStorage.getItem(FOLDED) === '1'; } catch {}
+    const box = el('details', { class: 'good-to-know', id: 'good-to-know' },
+      // Saved on the summary's click (also Enter / Space), before it folds or opens.
+      el('summary', { onclick: () => { try { localStorage.setItem(FOLDED, box.open ? '1' : '0'); } catch {} } }, icon('about'), el('b', { text: 'Good to know' })),
+      el('ul', {}, ...LIMITS.map(([head, text]) => el('li', {}, el('b', { text: head }), ' ', text))));
+    box.open = !folded;
+    return box;
+  }
+
   function controls() {
     const skip = el('input', { type: 'checkbox', id: 'skip-downloaded', onchange: (e) => chrome.storage.local.set({ skipDownloaded: e.target.checked }) });
     chrome.storage.local.get('skipDownloaded').then(({ skipDownloaded }) => { skip.checked = skipDownloaded !== false; });
@@ -62,7 +83,7 @@
     const idle = () => forget.replaceChildren(countLine,
       el('button', { type: 'button', class: 'link-btn', id: 'forget', onclick: ask }, 'Forget'));
     idle();
-    return el('div', { class: 'downloads-head' },
+    return el('div', { class: 'downloads-head' }, goodToKnow(),
       el('label', { class: 'setting-toggle' },
         el('span', { class: 'text' }, el('b', { text: 'Skip files downloaded before' }),
           el('span', { class: 'desc', text: "KeepKeep remembers what it downloaded and doesn't save it again, so your folder gets no copies. \"Download again\" always saves it anyway." })),
