@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Video controls for Instagram, whose web player can't skip forward or back:
 // on every video on screen, a thin scrubber along the bottom edge and a play /
 // pause button next to Instagram's own mute button, always visible; plus

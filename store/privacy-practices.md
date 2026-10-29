@@ -38,7 +38,7 @@ When the user clicks Download, the photos and videos of that post or story are s
 ### offscreen
 
 ```
-The background service worker cannot turn fetched media into downloadable files or report download progress by itself. A hidden offscreen document fetches the photos and videos the user asked to download, shows per-file progress, and hands them to chrome.downloads.
+The background service worker cannot turn fetched media into downloadable files or report download progress by itself. A hidden offscreen document fetches the photos and videos the user asked to download, shows per-file progress, joins a video's separate 1080p picture and sound into one MP4 on the user's computer, and hands the files to chrome.downloads.
 ```
 
 ### Host permission justification
@@ -72,8 +72,10 @@ security policy.)
 Tick only:
 
 - [x] **Website content** — the profiles and posts the user chooses to keep
-  (usernames, display names, links, small preview images). Stored locally in
-  the browser only.
+  (usernames, display names, links, small preview images), and a list of what
+  KeepKeep downloaded (Instagram's ids of the files, links, usernames, small
+  preview images, dates) so the same file isn't downloaded twice. Stored
+  locally in the browser only.
 
 Leave everything else unticked. KeepKeep never collects personally
 identifiable information, health, financial or authentication information,

@@ -63,11 +63,12 @@
     </header>
 
     <h1>Privacy Policy</h1>
-    <p class="updated">Effective 30 September 2026</p>
+    <p class="updated">Effective 29 October 2026</p>
 
     <div class="summary">
       <p><strong>In short:</strong></p>
       <ul>
+        <li>KeepKeep never asks for your password.</li>
         <li>Everything you save with KeepKeep stays in your browser, on your computer.</li>
         <li>KeepKeep has no servers, no accounts, no analytics and no ads. Its developer never receives your data.</li>
         <li>KeepKeep talks only to Instagram, from your browser, to show and save what you ask for.</li>
@@ -82,7 +83,9 @@
       <li><strong>Profiles you save:</strong> the username, the display name and a small copy of the profile picture.</li>
       <li><strong>Posts, reels and stories you save:</strong> the link, the owner's username, the type (photo, video, reel, story), a small preview image and, for stories, when they expire.</li>
       <li><strong>Your lists</strong> and which saved items are in them, and when you saved each item.</li>
-      <li><strong>Your settings</strong>, such as photo quality and whether anonymous story viewing is on.</li>
+      <li><strong>Your settings:</strong> photo size, video quality, whether anonymous story viewing is on and whether files downloaded before are skipped.</li>
+      <li><strong>What KeepKeep downloaded:</strong> for each file, Instagram's id of the photo or video, when it was downloaded and its file name; for each post or story, its link, the owner's username, how many files it had and a small preview image. This list is kept in the extension's own database in your browser, apart from your saved items, so that the same file isn't downloaded twice. You can see it, and clear it, in the KeepKeep app under Downloads.</li>
+      <li><strong>Small display choices</strong> of the KeepKeep app, such as whether you closed a note.</li>
     </ul>
     <p>Preview images are small copies made on your computer, so your lists keep their pictures after Instagram's own image links expire.</p>
 
@@ -91,12 +94,17 @@
     <ul>
       <li>to look up the details of a post, reel, story or profile you act on (its owner, pictures and videos);</li>
       <li>to make the small preview images for items you save;</li>
-      <li>to fetch the photos and videos you choose to download.</li>
+      <li>to fetch the photos and videos you choose to download;</li>
+      <li>to show a saved post in the KeepKeep app's side panel: Instagram's own view of that post is loaded from instagram.com. Before that, KeepKeep checks, without your Instagram sign-in, whether Instagram allows the post to be shown there.</li>
     </ul>
     <p>These are the same kinds of requests Instagram's own website makes; Instagram's privacy policy applies to them. KeepKeep sends nothing to its developer or to any third party.</p>
 
     <h2>Downloads</h2>
-    <p>When you click Download, the photos and videos are saved to your Downloads folder (in <code>Downloads/KeepKeep</code>). KeepKeep does not upload them anywhere and keeps no record of what you downloaded.</p>
+    <p>When you click Download, the photos and videos are saved to your Downloads folder (in <code>Downloads/KeepKeep</code>). A video's 1080p picture and sound are joined into one file on your computer. KeepKeep does not upload anything anywhere.</p>
+    <p>To avoid saving the same file twice, KeepKeep remembers which files it downloaded (see "What KeepKeep stores" above). It never reads your Downloads folder.</p>
+
+    <h2>Backup</h2>
+    <p>Export saves your saved profiles and posts, your lists and your settings to one file in <code>Downloads/KeepKeep</code>; the file stays on your computer. Import reads only a file you choose; everything in it is checked, and only KeepKeep's own kinds of data are taken. Your settings change only if you choose to use the backup's.</p>
 
     <h2>Anonymous story viewing</h2>
     <p>If you turn on anonymous story viewing, KeepKeep stops the one request that tells Instagram you have seen a story, by answering it inside the page instead of sending it. It does not read, store or change anything else. You can turn it off at any time in KeepKeep's settings.</p>
@@ -117,8 +125,8 @@
         <tbody>
           <tr><td><code>storage</code></td><td>Keeps your saved profiles and posts, your lists and your settings in your browser.</td></tr>
           <tr><td><code>unlimitedStorage</code></td><td>Room for the small preview images of saved items, which can exceed Chrome's default 10 MB when you save many items.</td></tr>
-          <tr><td><code>downloads</code></td><td>Saves the photos and videos you choose to download to your Downloads folder.</td></tr>
-          <tr><td><code>offscreen</code></td><td>Prepares the files you download and shows their progress.</td></tr>
+          <tr><td><code>downloads</code></td><td>Saves the photos and videos you choose to download, and backup files, to your Downloads folder.</td></tr>
+          <tr><td><code>offscreen</code></td><td>Prepares the files you download on your computer: fetches them with progress, and joins a video's 1080p picture and sound into one file.</td></tr>
           <tr><td>instagram.com</td><td>Adds KeepKeep's buttons to Instagram and looks up the post, story or profile you act on.</td></tr>
           <tr><td>cdninstagram.com, fbcdn.net</td><td>Instagram's media servers: fetches the photos and videos you download, and the preview images.</td></tr>
         </tbody>
@@ -127,8 +135,10 @@
 
     <h2>Your control</h2>
     <ul>
-      <li>Remove any saved item from KeepKeep's popup or with its button on Instagram.</li>
+      <li>Remove any saved item from KeepKeep's popup, the KeepKeep app or with its button on Instagram.</li>
       <li>Rename or delete your lists at any time (deleting a list keeps the items themselves).</li>
+      <li>Clear the list of what KeepKeep downloaded at any time (KeepKeep app → Downloads → Clear this list); your files stay.</li>
+      <li>Turn anonymous story viewing on or off at any time.</li>
       <li>Uninstalling KeepKeep removes everything it stored; Chrome deletes the extension's storage.</li>
     </ul>
 

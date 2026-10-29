@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Runs in Instagram's own page context (world: MAIN) so it can see the
 // page's requests. When "Watch stories anonymously" is on, the request that
 // tells Instagram a story was seen is answered here instead of being sent, so

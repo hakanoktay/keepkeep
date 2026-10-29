@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // The card in the top-right corner of Instagram: the drop target while dragging,
 // then the result of adding (with the list picker) or removing (with undo).
 // Styled after Instagram's own menus and buttons, in light and dark mode.
@@ -5,13 +6,15 @@ var KeepKeepPanel = (() => {
   const RESULT_MS = 8000; // how long the card stays after adding (paused while hovered)
   const SHORT_MS = 2500; // errors and "removed"
   const SEARCH_FROM = 7; // show a search field when there are this many lists
-  let host, card, els, onDrop, keyHandler, current;
+  const FOLD_MS = 320; // the picker's open / close transition
+  const FADE_MS = 160; // the card's fade out
+  let host, card, els, onDrop, keyHandler, current, hideTimer;
 
   // The KeepKeep logo, inline (pages can't load extension files without extra permissions).
+  // Its gradient id must be unique in a shadow root: a second copy needs its own id.
   const LOGO = '<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="kk-logo" x1="486.4" y1="0" x2="-14.9" y2="908.9" gradientUnits="userSpaceOnUse"><stop offset="0.365" stop-color="#8119B5"/><stop offset="0.849" stop-color="#450B62"/></linearGradient></defs><rect width="1024" height="1024" rx="220" fill="url(#kk-logo)"/><path fill="#fff" d="M518.609 839.484H194V701.984H256.5V355.5H194V218H506.109V355.5H456.5V496.906L559.625 355.5V218H802.984V355.5H749.078L625.25 505.891V511.359C667.438 511.359 700.51 518.651 724.469 533.234C748.427 547.557 760.406 572.557 760.406 608.234V671.516C760.406 679.589 762.62 686.75 767.047 693C771.734 698.99 778.115 701.984 786.188 701.984H830.719V839.484H687.75C600.25 839.484 556.5 799.51 556.5 719.562V651.594C556.5 638.312 552.203 625.292 543.609 612.531C535.016 599.51 524.859 593 513.141 593H456.5V701.984H518.609V839.484Z"/></svg>';
 
   const ICONS = {
-    basket: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16l-1.6 9.1a2 2 0 0 1-2 1.6H7.6a2 2 0 0 1-2-1.6z"/><path d="M2.5 10h19M8 10l3-6M16 10l-3-6"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -39,6 +42,9 @@ var KeepKeepPanel = (() => {
       --brand: #aa56d5; --brand-hover: #c07fe0; --brand-tint: rgba(170, 86, 213, 0.14);
     }
     @keyframes in { from { opacity: 0; transform: translateY(-8px) scale(0.98); } }
+    /* Closing: the list picker folds up first (see hide()), then the card fades. */
+    .card.leaving { pointer-events: none; animation: out 0.16s ease-in forwards; }
+    @keyframes out { to { opacity: 0; transform: translateY(-8px) scale(0.98); } }
     svg { display: block; width: 100%; height: 100%; }
     button { font: inherit; color: inherit; cursor: pointer; }
 
@@ -109,9 +115,12 @@ var KeepKeepPanel = (() => {
       position: absolute; top: 50%; right: 10px; width: 20px; height: 20px; margin-top: -10px; padding: 3px;
       border-radius: 50%; border: 1.5px solid var(--line); color: transparent; transition: all 0.12s;
     }
-    .box .key {
-      position: absolute; top: 6px; right: 8px; font-size: 10px; line-height: 1; color: var(--muted); display: none;
-    }
+    /* Reordering: drag a box (see startSort); the others slide out of its way. */
+    .grid { user-select: none; }
+    .grid.sorting .box:not(.dragging) { transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.12s, background 0.12s; }
+    .box.dragging { z-index: 2; cursor: grabbing; transition: none; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); }
+    .card.dark .box.dragging { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); }
+    .box.settling { z-index: 2; transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s; }
     /* Selected: brand border and tint, with a filled circle and white check. */
     .box.on { border-color: var(--brand); background: var(--brand-tint); }
     .box.on .tick { background: var(--brand); border-color: var(--brand); color: #fff; }
@@ -142,7 +151,7 @@ var KeepKeepPanel = (() => {
     const root = host.attachShadow({ mode: 'open' });
     root.innerHTML = `<style>${STYLE}</style>
       <div class="card">
-        <div class="drop"><div class="icon">${ICONS.basket}</div>Drop to add to basket</div>
+        <div class="drop"><div class="icon">${LOGO.replaceAll('kk-logo', 'kk-logo-drop')}</div>Drop to save to KeepKeep</div>
         <div class="head">
           <div class="thumb-slot"></div>
           <div class="text"><div class="title"></div><div class="sub"></div></div>
@@ -161,8 +170,8 @@ var KeepKeepPanel = (() => {
       .map((c) => [c, root.querySelector('.' + c)]));
     els.searchInput = els.search.querySelector('input');
 
-    root.querySelector('.close').addEventListener('click', hide);
-    els.bar.addEventListener('animationend', hide);
+    root.querySelector('.close').addEventListener('click', () => hide());
+    els.bar.addEventListener('animationend', () => hide());
     els.searchInput.addEventListener('input', () => renderBoxes());
 
     card.addEventListener('dragenter', (e) => { e.preventDefault(); card.classList.add('over'); });
@@ -182,16 +191,35 @@ var KeepKeepPanel = (() => {
 
   function mount(state) {
     if (!host) build();
-    if (!host.isConnected) document.documentElement.appendChild(host);
+    clearTimeout(hideTimer); // a new state while closing keeps the card
+    if (!host.isConnected) {
+      // Back on screen: the picker starts closed, never from where it was left.
+      closePicker();
+      document.documentElement.appendChild(host);
+    }
     card.className = `card ${state}${isDarkPage() ? ' dark' : ''}`;
     stopTimer();
     setKeys(false);
   }
 
-  function hide() {
+  // Closes the card: the list picker folds up first, then the card fades out.
+  // `now` removes it at once (e.g. for the download balloons in its place).
+  function hide(now) {
     current = null;
     setKeys(false);
-    host?.remove();
+    clearTimeout(hideTimer);
+    if (!host?.isConnected) return;
+    if (now) return host.remove();
+    stopTimer();
+    const folding = els.picker.classList.contains('open');
+    els.picker.classList.remove('open');
+    hideTimer = setTimeout(() => {
+      card.classList.add('leaving');
+      hideTimer = setTimeout(() => {
+        host.remove();
+        closePicker();
+      }, FADE_MS);
+    }, folding ? FOLD_MS : 0);
   }
 
   function startTimer(ms) {
@@ -244,13 +272,17 @@ var KeepKeepPanel = (() => {
   }
 
   function showBusy(title = 'Adding…', sub = 'Fetching details from Instagram') {
+    // Adding again while the picker is on screen: keep it open until the new
+    // result replaces its boxes, rather than animating it closed and open again.
+    const keepPicker = !!host?.isConnected && els.picker.classList.contains('open') && !card.classList.contains('dropping');
     mount('busy');
     const spinner = document.createElement('div');
     spinner.className = 'spinner';
     spinner.innerHTML = '<span></span>';
     els['thumb-slot'].replaceChildren(spinner);
     setHead(title, sub);
-    closePicker();
+    if (keepPicker) current = null; // the boxes belong to the previous item: clicks and 1–9 do nothing
+    else closePicker();
   }
 
   // A short notice with a thumbnail, e.g. after starting downloads.
@@ -304,9 +336,11 @@ var KeepKeepPanel = (() => {
     els.searchInput.value = '';
     els.search.hidden = lists.length < SEARCH_FROM;
     els.hint.textContent = lists.length ? 'Press 1–9' : '';
-    els.grid.classList.add('entering');
+    // Boxes slide in when the picker opens; if it stayed open, they just update.
+    const entering = !els.picker.classList.contains('open');
+    els.grid.classList.toggle('entering', entering);
     renderBoxes();
-    setTimeout(() => els.grid.classList.remove('entering'), 700);
+    if (entering) setTimeout(() => els.grid.classList.remove('entering'), 700);
     requestAnimationFrame(() => els.picker.classList.add('open'));
     setKeys(true);
     startTimer(RESULT_MS);
@@ -322,13 +356,18 @@ var KeepKeepPanel = (() => {
       const box = document.createElement('button');
       box.className = 'box' + (current.inLists.has(list.id) ? ' on' : '');
       box.style.animationDelay = `${Math.min(i, 8) * 30}ms`;
-      box.innerHTML = `<span class="name"></span><span class="count"></span><span class="tick">${ICONS.check}</span>` +
-        (i < 9 ? `<span class="key">${i + 1}</span>` : '');
+      box.innerHTML = `<span class="name"></span><span class="count"></span><span class="tick">${ICONS.check}</span>`;
       box.querySelector('.name').textContent = list.name;
       const n = current.counts[list.id] || 0;
       box.querySelector('.count').textContent = `${n} item${n === 1 ? '' : 's'}`;
-      box.title = list.name;
-      box.addEventListener('click', () => toggle(list.id));
+      box.title = q ? list.name : `${list.name} · drag to reorder`;
+      box.dataset.id = list.id;
+      box.addEventListener('click', () => {
+        if (box.dataset.dragged) delete box.dataset.dragged; // the end of a drag, not a click
+        else toggle(list.id);
+      });
+      // Reordering only makes sense on the full list, not on search results.
+      if (!q) box.addEventListener('pointerdown', (e) => startSort(e, box));
       return box;
     });
 
@@ -356,8 +395,127 @@ var KeepKeepPanel = (() => {
 
     const empty = !shown.length && q ? [Object.assign(document.createElement('div'), { className: 'empty', textContent: 'No matching lists' })] : [];
     els.grid.replaceChildren(...boxes, ...empty, add);
-    // Number hints only make sense while nothing is being typed.
-    for (const k of els.grid.querySelectorAll('.key')) k.style.display = q ? 'none' : 'block';
+  }
+
+  // ---- Reordering lists by dragging a box ----
+  // Pointer events, not HTML drag and drop: a native drag would make the page
+  // show the "Drop to save" card. A box only starts moving after a few pixels,
+  // so a plain click still ticks it. The boxes in the way slide aside (FLIP);
+  // on release the new order is saved and used everywhere (card, popup, 1–9).
+
+  const DRAG_FROM = 5; // px of movement before a press becomes a drag
+  const EDGE = 28; // px from the grid's top / bottom edge that scroll it
+
+  function startSort(e, box) {
+    if (e.button !== 0 || !current) return;
+    const s = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, active: false };
+    const move = (e) => {
+      if (e.pointerId !== s.id) return;
+      s.x = e.clientX;
+      s.y = e.clientY;
+      if (!s.active) {
+        if (Math.hypot(s.x - s.x0, s.y - s.y0) < DRAG_FROM) return;
+        s.active = true;
+        const r = box.getBoundingClientRect();
+        s.grabX = s.x0 - r.left; // where the box was grabbed
+        s.grabY = s.y0 - r.top;
+        box.setPointerCapture(s.id);
+        els.grid.classList.remove('entering'); // its animation would override the transform
+        els.grid.classList.add('sorting');
+        box.classList.add('dragging');
+        stopTimer(); // the card mustn't close mid-drag; saveOrder() restarts it
+        frame();
+      }
+      follow();
+    };
+    const end = (e) => {
+      if (e.pointerId !== s.id) return;
+      removeEventListener('pointermove', move, true);
+      removeEventListener('pointerup', end, true);
+      removeEventListener('pointercancel', end, true);
+      if (!s.active) return;
+      s.active = false;
+      box.dataset.dragged = '1'; // swallow the click that follows
+      setTimeout(() => delete box.dataset.dragged, 0);
+      // Glide into the slot it was dropped on.
+      box.classList.replace('dragging', 'settling');
+      box.style.transform = '';
+      box.addEventListener('transitionend', () => box.classList.remove('settling'), { once: true });
+      setTimeout(() => box.classList.remove('settling'), 300);
+      els.grid.classList.remove('sorting');
+      saveOrder();
+    };
+    // Keeps scrolling while the pointer rests near the grid's top or bottom.
+    const frame = () => {
+      if (!s.active) return;
+      const g = els.grid.getBoundingClientRect();
+      const step = s.y < g.top + EDGE ? -6 : s.y > g.bottom - EDGE ? 6 : 0;
+      if (step) {
+        els.grid.scrollTop += step;
+        follow();
+      }
+      requestAnimationFrame(frame);
+    };
+    // The box whose slot is under the pointer swaps places with the dragged one.
+    // Slots, not where boxes are on screen: one sliding away mustn't swap back.
+    const follow = () => {
+      const over = [...els.grid.querySelectorAll('.box[data-id]')].find((b) => {
+        if (b === box) return false;
+        const r = slot(b);
+        return s.x >= r.left && s.x <= r.right && s.y >= r.top && s.y <= r.bottom;
+      });
+      if (over) flip(() => {
+        const boxes = [...els.grid.querySelectorAll('.box[data-id]')];
+        if (boxes.indexOf(over) > boxes.indexOf(box)) over.after(box);
+        else over.before(box);
+      });
+      // Keep the dragged box under the pointer, wherever its slot is now.
+      const r = slot(box);
+      box.style.transform = `translate(${s.x - s.grabX - r.left}px, ${s.y - s.grabY - r.top}px)`;
+    };
+    addEventListener('pointermove', move, true);
+    addEventListener('pointerup', end, true);
+    addEventListener('pointercancel', end, true);
+  }
+
+  async function saveOrder() {
+    if (!current) return;
+    const ids = [...els.grid.querySelectorAll('.box[data-id]')].map((b) => b.dataset.id);
+    const byId = new Map(current.lists.map((l) => [l.id, l]));
+    current.lists = ids.map((id) => byId.get(id));
+    current.shown = current.lists;
+    startTimer(RESULT_MS); // interacting keeps the card open
+    await KeepKeep.reorderLists(current.recordKey[0], ids);
+  }
+
+  // A box's place in the grid, without the transform it may be sliding with.
+  function slot(b) {
+    const r = b.getBoundingClientRect();
+    const t = getComputedStyle(b).transform;
+    const m = t && t !== 'none' ? new DOMMatrixReadOnly(t) : { m41: 0, m42: 0 };
+    return { left: r.left - m.m41, top: r.top - m.m42, right: r.right - m.m41, bottom: r.bottom - m.m42 };
+  }
+
+  // Runs `change` (which moves boxes in the DOM) and animates every other box
+  // from where it was on screen to its new place.
+  function flip(change) {
+    const boxes = [...els.grid.querySelectorAll('.box:not(.dragging)')];
+    const before = new Map(boxes.map((b) => [b, b.getBoundingClientRect()]));
+    change();
+    for (const b of boxes) {
+      b.style.transition = 'none';
+      b.style.transform = '';
+    }
+    for (const b of boxes) {
+      const was = before.get(b);
+      const now = b.getBoundingClientRect();
+      if (was.left !== now.left || was.top !== now.top) b.style.transform = `translate(${was.left - now.left}px, ${was.top - now.top}px)`;
+    }
+    void els.grid.offsetWidth;
+    for (const b of boxes) {
+      b.style.transition = '';
+      b.style.transform = '';
+    }
   }
 
   async function toggle(listId) {
@@ -393,7 +551,7 @@ var KeepKeepPanel = (() => {
   function showRemoved(title, thumb, round, onUndo) {
     mount('removed');
     setThumb(thumb, round);
-    setHead(title, 'Removed from basket');
+    setHead(title, 'Removed from KeepKeep');
     closePicker();
     const undo = Object.assign(document.createElement('button'), { className: 'text-btn', textContent: 'Undo' });
     undo.addEventListener('click', onUndo);
@@ -401,30 +559,35 @@ var KeepKeepPanel = (() => {
     startTimer(5000);
   }
 
-  // ---- Download balloons ----
-  // A stack on the right: one balloon with the overall progress, then one per
-  // photo / video with its thumbnail and progress. They leave on their own.
+  // ---- Download card ----
+  // One card for every download in progress, top right. Downloading several
+  // posts one after another adds them to the same card ("Downloading 2 posts").
+  // The smart list never scrolls: finished files fold into "✓ n saved", the
+  // file being downloaded and the next two show, the rest wait in "+n more".
+  // Rows glide in and out and the card eases to its new height. The minimise
+  // button folds the list away; the header then says how far it is.
 
+  const ROW_H = 52; // one file row
+  const SLOTS = 3; // file rows: the one downloading and two in the list
   const DL_STYLE = `
     :host { all: initial; }
     * { box-sizing: border-box; }
     .stack {
       --bg: #fff; --text: #000; --muted: #737373; --secondary: #efefef; --brand: #8119b5; --green: #58c322; --red: #ed4956;
-      --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      position: fixed; top: 16px; right: 16px; z-index: 2147483646; width: 320px; max-height: calc(100vh - 32px);
-      display: flex; flex-direction: column; gap: 8px; overflow-y: auto; scrollbar-width: none; pointer-events: none;
+      --shadow: 0 6px 24px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.08);
+      position: fixed; top: 16px; right: 16px; z-index: 2147483646; width: 320px; pointer-events: none;
       font: 400 14px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text);
     }
-    .stack.dark { --bg: #262626; --text: #f5f5f5; --muted: #a8a8a8; --secondary: #363636; --brand: #aa56d5; --shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
-    .bubble {
-      position: relative; flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 12px; overflow: hidden;
-      background: var(--bg); border-radius: 12px; box-shadow: var(--shadow); pointer-events: auto;
-      animation: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    .stack.dark { --bg: #262626; --text: #f5f5f5; --muted: #a8a8a8; --secondary: #363636; --brand: #aa56d5; --shadow: 0 6px 24px rgba(0, 0, 0, 0.55); }
+    .job {
+      position: relative; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; pointer-events: auto;
+      animation: slide-in 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: opacity 0.2s;
     }
-    .bubble.item { margin-left: 24px; padding: 8px 10px; }
-    .bubble.leaving { animation: slide-out 0.3s ease-in both; }
+    .job.leaving { animation: slide-out 0.32s ease-in both; }
     @keyframes slide-in { from { opacity: 0; transform: translateX(40px); } }
     @keyframes slide-out { to { opacity: 0; transform: translateX(40px); } }
+    .bubble { position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+    .header { clip-path: inset(0 round 14px 14px 0 0); }
     .thumb { flex: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; background: var(--secondary); display: grid; place-items: center; color: var(--muted); }
     .item .thumb { width: 36px; height: 36px; }
     .thumb.logo { background: none; }
@@ -440,20 +603,82 @@ var KeepKeepPanel = (() => {
     .done-mark { width: 22px; height: 22px; border-radius: 50%; background: var(--green); color: #fff; padding: 4px; animation: pop 0.25s ease-out; }
     @keyframes pop { from { transform: scale(0.4); opacity: 0; } }
     .pct { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
-    .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: linear-gradient(90deg, #450b62, #8119b5 50%, #aa56d5); transition: width 0.2s; }
+    .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: linear-gradient(90deg, #450b62, #8119b5 50%, #aa56d5); transition: width 0.3s ease; }
     .done .bar { background: var(--green); }
+    /* Saved before, so not downloaded again (specs/2026-10-28-no-duplicate-downloads.md) */
+    .skipped .done-mark { background: var(--secondary); color: var(--muted); }
+    .skipped .bar { background: var(--secondary); }
+    .again {
+      flex: none; height: 26px; padding: 0 10px; border: 0; border-radius: 13px; background: var(--brand); color: #fff;
+      font: 600 12px/26px inherit; font-family: inherit; white-space: nowrap; cursor: pointer; animation: pop 0.25s ease-out;
+    }
+    .again:hover { filter: brightness(1.1); }
     svg { display: block; width: 100%; height: 100%; }
+    /* The minimise button */
+    .min {
+      flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 7px; padding: 0;
+      background: var(--secondary); color: var(--muted); cursor: pointer; transition: color 0.15s, filter 0.15s;
+    }
+    .min:hover { color: var(--text); filter: brightness(0.95); }
+    .min svg { width: 14px; height: 14px; transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .job.collapsed .min svg { transform: rotate(180deg); }
+    /* The list: its height eases to the content; rows glide (see layout()). */
+    .listbox { position: relative; overflow: hidden; border-top: 1px solid var(--secondary); transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s, border-color 0.25s; clip-path: inset(0 round 0 0 14px 14px); }
+    .job.collapsed .listbox { opacity: 0; border-top-color: transparent; }
+    .items { position: relative; padding: 4px; display: flex; flex-direction: column; }
+    /* The files are one list in a window of fixed rows: it scrolls by itself to
+       the file downloading, and by hand; the page under it doesn't scroll. */
+    .track {
+      position: relative; overflow-y: auto; flex: none; overscroll-behavior: contain;
+      scrollbar-width: thin; scrollbar-color: transparent transparent;
+      transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), scrollbar-color 0.2s;
+    }
+    .track:hover { scrollbar-color: var(--secondary) transparent; }
+    .reel .item { height: ${ROW_H}px; }
+    /* The file downloading has its own fixed place above the list; scrolling never moves it. */
+    .now { position: relative; flex: none; }
+    .now .item { height: ${ROW_H}px; }
+    .now.ruled { border-bottom: 1px solid var(--secondary); }
+    .now .item.rise { animation: rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+    .row { border-radius: 10px; transition: opacity 0.35s, transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .row.gone { display: none; }
+    .row.waiting { opacity: 0.5; }
+    .row.out { position: absolute; left: 4px; right: 4px; opacity: 0; transform: translateY(-14px) scale(0.97); pointer-events: none; }
+    .row.in { opacity: 0; transform: translateY(10px); }
+    .item { padding: 8px 10px; }
+    .item:hover { background: var(--secondary); }
+    .sumrow { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+    .sumrow.saved { color: var(--text); height: 40px; }
+    .sumrow.bad { color: var(--red); }
+    .sumrow .check { width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; padding: 3px; flex: none; transition: background 0.25s; }
+    .sumrow.zero { color: var(--muted); }
+    .sumrow.zero .check { background: var(--secondary); color: transparent; }
+    .sumrow .check.pop { animation: pop 0.25s ease-out; }
+    .stackthumbs { display: flex; margin-left: auto; }
+    .stackthumbs img, .stackthumbs .ph { width: 24px; height: 24px; border-radius: 6px; object-fit: cover; border: 2px solid var(--bg); margin-left: -8px; background: var(--secondary); box-sizing: content-box; }
+    .stackthumbs :first-child { margin-left: 0; }
+    .sumrow.more { justify-content: center; font-weight: 500; font-size: 12px; padding: 4px 10px 6px; min-height: 28px; }
+    /* Over one of KeepKeep's own buttons under the card: it fades and the click goes through. */
+    .stack.through .job { opacity: 0.18; }
+    .stack.through .job, .stack.through .job * { pointer-events: none; }
+    .sumrow.more.back { color: var(--brand); cursor: pointer; }
+    .sumrow.more.back:hover { text-decoration: underline; }
+    @media (prefers-reduced-motion: reduce) { .row, .listbox, .job, .track { transition: none; animation: none; } }
   `;
   const DL_ICONS = {
     download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v12M7 10.5l5 5 5-5"/><path d="M4 16.5v2a2.5 2.5 0 0 0 2.5 2.5h11a2.5 2.5 0 0 0 2.5-2.5v-2"/></svg>',
     video: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>',
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 9 9"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
   };
   let dlHost, dlStack;
-  const dlJobs = new Map(); // job → { header, items: [{ el, loaded, total, done }] }
+  const dlJobs = new Map(); // job → { username, items: [file], finished, failed }
+  let board = null; // the card: { card, header, box, list, savedRow, moreRow, files: [], peak, collapsed, saved, endTimer }
 
   const el = (tag, cls, html) => Object.assign(document.createElement(tag), { className: cls || '', innerHTML: html || '' });
   const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
   function dlMount() {
     if (!dlHost) {
@@ -467,9 +692,8 @@ var KeepKeepPanel = (() => {
     dlStack.classList.toggle('dark', isDarkPage());
   }
 
-  function bubble(cls, thumb, name, sub, delay = 0) {
+  function bubble(cls, thumb, name, sub) {
     const b = el('div', `bubble ${cls}`);
-    b.style.animationDelay = `${delay}ms`;
     const t = thumb ? Object.assign(el('img', 'thumb'), { src: thumb }) : el('div', 'thumb logo', LOGO);
     if (thumb) t.onerror = () => t.replaceWith(el('div', 'thumb logo', LOGO));
     b.append(t, el('div', 'text'), el('div', 'state', '<div class="spin"></div>'), el('div', 'bar'));
@@ -487,85 +711,331 @@ var KeepKeepPanel = (() => {
     b.querySelector('.bar').style.width = '100%';
   };
 
+  // The card, made on the first download and reused while any is running.
+  function boardFor() {
+    dlMount();
+    if (board && board.card.isConnected && !board.card.classList.contains('leaving')) {
+      clearTimeout(board.endTimer);
+      return board;
+    }
+    const card = el('div', 'job');
+    const header = bubble('header', null, 'Preparing download…', 'Finding the best quality');
+    const min = el('button', 'min', DL_ICONS.chevron);
+    min.title = 'Hide the files (the download goes on)';
+    min.addEventListener('click', (e) => { e.stopPropagation(); if (board === b) collapse(!b.collapsed); });
+    header.querySelector('.state').before(min);
+    const box = el('div', 'listbox');
+    const list = el('div', 'items');
+    const savedRow = el('div', 'row sumrow saved gone', `<span class="check">${ICONS.check}</span><span class="label"></span><span class="stackthumbs"></span>`);
+    const now = el('div', 'now');
+    const track = el('div', 'track');
+    const reel = el('div', 'reel');
+    track.append(reel);
+    const moreRow = el('div', 'row sumrow more gone');
+    list.append(savedRow, now, track, moreRow);
+    const b = { card, header, box, list, now, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1, browsing: false };
+    // Scrolling by hand stops the list following the download; it comes back
+    // to the file downloading 1.5 s after the pointer leaves the card, or at
+    // once with "Back to current". The handlers keep to their own card: a
+    // leaving card (no longer `board`) still gets pointer events.
+    const relayout = () => { if (board === b) layout(); };
+    const browse = () => { clearTimeout(b.backTimer); if (!b.browsing) { b.browsing = true; relayout(); } };
+    const back = () => { clearTimeout(b.backTimer); if (b.browsing) { b.browsing = false; relayout(); } };
+    for (const type of ['wheel', 'touchstart', 'pointerdown']) track.addEventListener(type, browse, { passive: true });
+    card.addEventListener('pointerleave', () => { if (b.browsing) b.backTimer = setTimeout(back, 1500); });
+    card.addEventListener('pointerenter', () => { clearTimeout(b.backTimer); if (b.ending) clearTimeout(b.endTimer); });
+    card.addEventListener('pointerleave', () => { if (b.ending && board === b) leaveLater(b, 2500); });
+    moreRow.addEventListener('click', (e) => { if (b.browsing) { e.stopPropagation(); back(); } });
+    box.append(list);
+    box.style.height = '0px';
+    card.append(header, box);
+    dlStack.append(card);
+    board = b;
+    return b;
+  }
+
+  const active = () => [...dlJobs.values()].filter((j) => !j.finished && !j.failed);
+
+  // Header text: what's going on, for one post or several.
+  function headerText() {
+    const b = board;
+    if (!b) return;
+    const files = b.files.filter((f) => !f.job.failed);
+    const posts = new Set(files.map((f) => f.job)).size;
+    const done = files.filter((f) => f.done).length;
+    if (!files.length) return; // still preparing
+    if (b.collapsed) setText(b.header, null, `${done} of ${files.length} saved · ${Math.round(b.peak * 100)}%`);
+    else if (posts > 1) setText(b.header, null, plural(files.length, 'file'));
+    else setText(b.header, null, files[0].job.username ? '@' + files[0].job.username : '');
+    if (posts > 1) setText(b.header, `Downloading ${plural(posts, 'post')}`);
+    else if (files.length === 1) setText(b.header, `Downloading ${files[0].kind === 'video' ? 'video' : 'photo'}`);
+    else setText(b.header, `Downloading ${files.length} files`);
+  }
+
+  function overall() {
+    const b = board;
+    const files = b.files.filter((f) => !f.job.failed);
+    if (!files.length) return;
+    const all = files.reduce((s, f) => s + (f.done ? 1 : f.f || 0), 0) / files.length;
+    b.peak = Math.max(b.peak, all); // never steps back
+    b.header.querySelector('.bar').style.width = `${Math.round(b.peak * 100)}%`;
+  }
+
+  function collapse(on) {
+    const b = board;
+    b.collapsed = on;
+    b.card.classList.toggle('collapsed', on);
+    b.header.querySelector('.min').title = on ? 'Show the files' : 'Hide the files (the download goes on)';
+    fitHeight();
+    headerText();
+  }
+
+  function fitHeight() {
+    const b = board;
+    b.box.style.height = b.collapsed ? '0px' : `${b.list.offsetHeight}px`;
+  }
+
+  // The file downloading (the first unfinished one; at the end the last file)
+  // sits in its own fixed place, under "✓ n of N saved". The other files stay
+  // in their order in a list below it, a window of up to two rows: it shows
+  // the files after the one downloading and scrolls on as files finish, or by
+  // hand (then it stays put). A finished file drops from the fixed place into
+  // the list and the next one rises in. The card's height is fixed; it
+  // changes only when another post joins.
+  function layout() {
+    const b = board;
+    if (!b) return;
+    const files = b.files.filter((f) => !f.job.failed);
+    const open = files.findIndex((f) => !f.done);
+    const cur = files[open < 0 ? files.length - 1 : open];
+    // The fixed place: the current file; the list: all the others, in order.
+    const was = b.now.firstElementChild;
+    if (cur && was !== cur.el) {
+      // Only the two rows move, so a list scrolled by hand stays where it is.
+      const i = files.findIndex((f) => f.el === was);
+      if (i >= 0) b.reel.insertBefore(was, files.slice(i + 1).find((f) => f.el.parentNode === b.reel)?.el || null);
+      cur.el.classList.remove('rise');
+      b.now.replaceChildren(cur.el);
+      if (was) { void cur.el.offsetWidth; cur.el.classList.add('rise'); }
+    }
+    const rest = files.filter((f) => f !== cur);
+    const slots = Math.min(rest.length, SLOTS - 1);
+    const next = open < 0 ? rest.length : open; // the first file after the current one, in the list
+    const start = Math.max(0, Math.min(next, rest.length - slots));
+    rest.forEach((f, i) => {
+      f.el.classList.toggle('away', i < start || i >= start + slots);
+      f.el.classList.toggle('waiting', !f.done && !f.started);
+    });
+    cur?.el.classList.remove('away');
+    cur?.el.classList.toggle('waiting', !cur.done && !cur.started);
+    b.now.classList.toggle('ruled', slots > 0);
+    b.track.style.height = `${slots * ROW_H}px`;
+    if (!b.browsing && Math.abs(b.track.scrollTop - start * ROW_H) > 0.5) {
+      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      b.track.scrollTo({ top: start * ROW_H, behavior: still || !b.card.isConnected ? 'instant' : 'smooth' });
+    }
+    const many = files.length > SLOTS;
+    b.savedRow.classList.toggle('gone', !many);
+    b.moreRow.classList.toggle('gone', !many);
+    const saved = files.filter((f) => f.done).length;
+    if (saved !== b.saved) {
+      b.savedRow.classList.toggle('zero', !saved);
+      if (saved > b.saved && b.saved >= 0) {
+        const check = b.savedRow.querySelector('.check');
+        check.classList.remove('pop'); void check.offsetWidth; check.classList.add('pop');
+      }
+      b.saved = saved;
+      const pics = files.filter((f) => f.done).slice(-4).map((f) => (f.thumb
+        ? Object.assign(document.createElement('img'), { src: f.thumb, alt: '', onerror() { this.replaceWith(el('span', 'ph')); } })
+        : el('span', 'ph')));
+      b.savedRow.querySelector('.stackthumbs').replaceChildren(...pics);
+    }
+    b.savedRow.querySelector('.label').textContent = `${saved} of ${files.length} saved`;
+    const more = rest.length - start - slots;
+    b.moreRow.classList.toggle('back', b.browsing);
+    b.moreRow.textContent = b.browsing ? 'Back to current' : more > 0 ? `+${more} more` : '';
+    fitHeight();
+    headerText();
+  }
+
+  // All done (or failed): the header says so, then the card leaves. Files
+  // saved before were skipped: the header says that too, and "Download again"
+  // saves just those (the card then waits longer, and while hovered).
+  function maybeEnd() {
+    const b = board;
+    if (!b || active().length) return;
+    const files = b.files.filter((f) => !f.job.failed);
+    const skipped = files.filter((f) => f.skipped).length;
+    const again = [...new Set(files.map((f) => f.job.again).filter(Boolean))];
+    clearTimeout(b.endTimer);
+    b.header.querySelector('.again')?.remove();
+    if (files.length) {
+      if (skipped === files.length) {
+        setText(b.header, 'Already downloaded', files.length === 1 ? files[0].filename : `${plural(files.length, 'file')}, downloaded before`);
+      } else {
+        setText(b.header, 'Saved to Downloads/KeepKeep', skipped ? `${plural(files.length, 'file')} · ${skipped} downloaded before`
+          : files.length === 1 ? files[0].filename : plural(files.length, 'file'));
+      }
+      markDone(b.header);
+      b.header.classList.toggle('skipped', skipped === files.length);
+    }
+    if (again.length) {
+      const button = el('button', 'again');
+      button.textContent = 'Download again';
+      button.title = 'Download the skipped files once more (e.g. if you deleted them)';
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        leave(b);
+        again.forEach((fn) => fn());
+      });
+      b.header.querySelector('.state').before(button);
+    }
+    b.ending = true;
+    if (!b.card.matches(':hover')) leaveLater(b, again.length ? 9000 : files.length ? 4000 : 3500);
+  }
+
+  function leaveLater(b, ms) {
+    clearTimeout(b.endTimer);
+    b.endTimer = setTimeout(() => { if (!active().length) leave(b); }, ms);
+  }
+
+  function leave(b) {
+    clearTimeout(b.endTimer);
+    clearTimeout(b.backTimer);
+    for (const [job, j] of dlJobs) if (j.finished || j.failed) dlJobs.delete(job);
+    b.card.classList.add('leaving');
+    setTimeout(() => b.card.remove(), 320);
+    if (board === b) board = null;
+  }
+
   const downloads = {
     start(job) {
-      dlMount();
-      hide(); // the corner card would sit under the balloons
-      const header = bubble('header', null, 'Preparing download…', 'Finding the best quality');
-      dlStack.append(header);
-      dlJobs.set(job, { header, items: [] });
+      hide(true); // the corner card would sit under the download card
+      const b = boardFor();
+      dlJobs.set(job, { items: [], username: null });
+      b.ending = false;
+      clearTimeout(b.endTimer);
+      b.header.querySelector('.again')?.remove();
+      if (b.header.classList.contains('done') || b.header.classList.contains('bad')) {
+        b.header.classList.remove('done', 'bad', 'skipped');
+        b.header.querySelector('.state').innerHTML = '<div class="spin"></div>';
+        if (!b.files.length) setText(b.header, 'Preparing download…', 'Finding the best quality');
+      }
     },
 
     items(job, { username, files }) {
       const j = dlJobs.get(job);
-      if (!j) return;
-      const n = files.length;
-      setText(j.header, `Downloading ${n === 1 ? (files[0].kind === 'video' ? 'video' : 'photo') : `${n} files`}`,
-        username ? '@' + username : '');
-      files.forEach((f, i) => {
-        const b = bubble('item', f.thumb, f.filename, 'Waiting…', 60 * (i + 1));
-        if (!f.thumb) b.querySelector('.thumb').innerHTML = DL_ICONS[f.kind] || DL_ICONS.image;
-        b.querySelector('.state').innerHTML = '<span class="pct"></span>';
-        (j.items.at(-1)?.el || j.header).after(b);
-        j.items.push({ el: b, loaded: 0, total: 0, done: false });
-      });
+      if (!j || !board) return;
+      j.username = username;
+      for (const f of files) {
+        const row = bubble('row item gone', f.thumb, f.filename, 'Waiting…');
+        if (!f.thumb) row.querySelector('.thumb').innerHTML = DL_ICONS[f.kind] || DL_ICONS.image;
+        row.querySelector('.state').innerHTML = '<span class="pct"></span>';
+        row.classList.remove('gone');
+        board.reel.append(row);
+        const it = { el: row, job: j, kind: f.kind, filename: f.filename, thumb: f.thumb, loaded: 0, total: 0, done: false };
+        j.items.push(it);
+        board.files.push(it);
+      }
+      layout();
     },
 
-    progress(job, index, loaded, total, done) {
-      const j = dlJobs.get(job);
-      const it = j?.items[index];
-      if (!it || it.done) return;
+    // `phase` while a video's DASH files are put into one MP4 after they were
+    // fetched: 'convert' (Best) or 'join' (Original), `fraction` 0–1.
+    // `fallbackHeight` (e.g. 720) when the video's single file was saved
+    // instead of its DASH files: shown quietly after the size.
+    // `skipped` (with `at`, when): downloaded before, not downloaded again.
+    progress(job, index, loaded, total, done, { phase, fraction, fallbackHeight, skipped, at } = {}) {
+      const it = dlJobs.get(job)?.items[index];
+      if (!it || it.done || !board) return;
+      if (skipped) {
+        Object.assign(it, { done: true, skipped: true, started: true, f: 1 });
+        it.el.classList.add('skipped');
+        const when = at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+        setText(it.el, null, `Downloaded before${when ? ' · ' + when : ''}`);
+        markDone(it.el);
+        overall();
+        layout();
+        return;
+      }
+      if (!it.started) { it.started = true; it.el.classList.remove('waiting'); }
       Object.assign(it, { loaded, total: total || it.total });
-      const f = it.total ? loaded / it.total : 0;
-      it.el.querySelector('.bar').style.width = `${Math.round(f * 100)}%`;
+      it.f = phase ? Math.min(1, Math.max(0, fraction || 0)) : it.total ? loaded / it.total : 0;
+      it.el.querySelector('.bar').style.width = `${Math.round(it.f * 100)}%`;
       if (done) {
         it.done = true;
-        setText(it.el, null, size(loaded));
+        setText(it.el, null, fallbackHeight ? `${size(loaded)} · ${fallbackHeight}p` : size(loaded));
         markDone(it.el);
+        layout();
+      } else if (phase) {
+        setText(it.el, null, phase === 'convert' ? `Converting ${Math.round(it.f * 100)}%` : 'Joining…');
+        it.el.querySelector('.pct').textContent = '';
       } else {
         setText(it.el, null, it.total ? `${size(loaded)} of ${size(it.total)}` : size(loaded));
-        it.el.querySelector('.pct').textContent = it.total ? `${Math.round(f * 100)}%` : '';
+        it.el.querySelector('.pct').textContent = it.total ? `${Math.round(it.f * 100)}%` : '';
       }
-      // Overall progress on the header balloon.
-      const all = j.items.reduce((s, x) => s + (x.done ? 1 : x.total ? x.loaded / x.total : 0), 0) / j.items.length;
-      j.header.querySelector('.bar').style.width = `${Math.round(all * 100)}%`;
+      overall();
+      if (board.collapsed) headerText();
     },
 
     finish(job, res) {
       const j = dlJobs.get(job);
-      if (!j) return;
-      j.items.forEach((it) => it.done || markDone(it.el));
-      const n = res.filenames.length;
-      setText(j.header, 'Saved to Downloads/KeepKeep', n === 1 ? res.filenames[0] : `${n} files`);
-      markDone(j.header);
-      dismiss(job, 4000);
+      if (!j || !board) return;
+      j.finished = true;
+      j.again = res?.again || null;
+      for (const it of j.items) if (!it.done) { it.done = true; markDone(it.el); }
+      overall();
+      layout();
+      maybeEnd();
     },
 
     fail(job, text) {
       const j = dlJobs.get(job);
-      if (!j) return;
-      j.items.forEach((it) => it.el.remove());
-      j.items = [];
-      j.header.classList.add('bad');
-      j.header.querySelector('.state').innerHTML = '';
-      setText(j.header, text, 'Try again in a moment');
-      dismiss(job, 3500);
+      if (!j || !board) return;
+      j.failed = true;
+      for (const it of j.items) it.el.remove();
+      board.files = board.files.filter((f) => f.job !== j);
+      if (!board.files.length && !active().length) {
+        // Nothing else running: the header tells it, as before.
+        board.header.classList.add('bad');
+        board.header.querySelector('.state').innerHTML = '';
+        setText(board.header, text, 'Try again in a moment');
+      } else {
+        // Others go on: a red line in the list for a few seconds.
+        const row = el('div', 'row sumrow bad in');
+        row.textContent = text;
+        board.list.insertBefore(row, board.moreRow);
+        requestAnimationFrame(() => row.classList.remove('in'));
+        setTimeout(() => { row.classList.add('out'); setTimeout(() => { row.remove(); layout(); }, 320); }, 3500);
+      }
+      layout();
+      maybeEnd();
     },
   };
 
-  function dismiss(job, after) {
-    setTimeout(() => {
-      const j = dlJobs.get(job);
-      if (!j) return;
-      dlJobs.delete(job);
-      const all = [...j.items.map((it) => it.el).reverse(), j.header];
-      all.forEach((b, i) => {
-        b.style.animationDelay = `${i * 50}ms`;
-        b.classList.add('leaving');
-        setTimeout(() => b.remove(), 300 + i * 50);
+  // Click-through, only for KeepKeep's own buttons under the card (Download,
+  // Profile, Media…): over one of them the card fades and the click reaches
+  // it, so the next download needn't wait. Anywhere else the card stays put.
+  let throughFrame = 0, px = 0, py = 0;
+  addEventListener('pointermove', (e) => {
+    px = e.clientX; py = e.clientY; // the latest position, used by the next frame
+    if (!dlStack?.children.length || throughFrame) return;
+    throughFrame = requestAnimationFrame(() => {
+      throughFrame = 0;
+      const x = px, y = py;
+      const card = dlStack.querySelector('.job');
+      const r = card?.getBoundingClientRect();
+      const over = r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      // The card's own buttons (minimise, Download again) always stay clickable.
+      const onMin = [...(card?.querySelectorAll('.min, .again') || [])].some((n) => {
+        const r = n.getBoundingClientRect();
+        return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
       });
-    }, after);
-  }
+      const under = over && !onMin && document.elementsFromPoint(x, y).find((n) => n !== dlHost && !dlHost.contains(n));
+      dlStack.classList.toggle('through', !!under?.closest?.('[data-keepkeep]'));
+    });
+  }, { passive: true, capture: true });
+
 
   return { isDarkPage, showDrop, isDropping, showBusy, showInfo, showError, showResult, showRemoved, hide, downloads };
 })();
