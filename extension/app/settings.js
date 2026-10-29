@@ -113,7 +113,7 @@
         el('section', {}, el('h2', { text: 'Video quality' }),
           option('video-quality', 'videoQuality', 'standard', 'Standard (recommended)', "Up to 720p, H.264 MP4, Instagram's own single file. Instant, opens everywhere."),
           option('video-quality', 'videoQuality', 'original', 'Original', "Up to 1080p, VP9 MP4, exactly as Instagram stores it. Instant and smaller, but QuickTime, Photos, iMovie and iPhone can't open it."),
-          option('video-quality', 'videoQuality', 'best', 'Best (recommended)', 'Up to 1080p, H.264 MP4. Opens on every device and app. Takes a few seconds longer.')),
+          option('video-quality', 'videoQuality', 'best', 'Best', 'Up to 1080p, H.264 MP4. Opens on every device and app. Takes a few seconds longer.')),
         el('section', {}, el('h2', { text: 'Stories' }),
           el('label', { class: 'setting-toggle' },
             el('span', { class: 'text' }, el('b', { text: 'Watch stories anonymously' }),

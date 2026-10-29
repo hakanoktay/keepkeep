@@ -26,7 +26,7 @@ stay one click, no dialogs, one file per video in `Downloads/KeepKeep`.
 
 Settings (popup and app page), next to Photo size, the same option style:
 
-- **Best (recommended)** — "Up to 1080p, plays everywhere. Takes a few
+- **Best** — "Up to 1080p, plays everywhere. Takes a few
   seconds longer." The 1080p VP9 video is converted to H.264; the audio is
   copied as is; one MP4.
 - **Original** — "Up to 1080p, exactly as Instagram stores it. Fastest, but
