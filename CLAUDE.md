@@ -63,6 +63,7 @@ There is no build step; `extension/` is loaded unpacked as is.
 | `extension/app/whats-new.js` | `WHATS_NEW` notes per version, `shouldShowWhatsNew(previous, current)`, `pagesToOpen(details, version)`; also loaded by `background.js` via `importScripts` (no DOM in the decision code), the view is registered only in the app page. Add notes for each minor release |
 | `extension/popup.*` | Popup: lists, single-pane settings slide (opens only via ⚙) |
 | `ROADMAP.md` | Planned / under consideration / done |
+| `documentation/` | User documentation, one Markdown file per section; `README.md` has the contents, the status of each section and the writing rules. Source for the website, then the store texts, then What's new. `_sources/` = raw unchecked notes from the code, not published |
 | `specs/` | Design and plan of the app page (`2026-10-02-keepkeep-app-page.md`, `...-plan.md`) |
 | `store/` | Chrome Web Store listing, privacy answers, images (`assets/`) |
 | `docs/` | GitHub Pages site: `index.html`, `privacy.html`, `images/` |
