@@ -526,12 +526,24 @@ body.peek-open #notice { right: calc(min(440px, 100vw) + 24px); }
 }
 .toolbar .skip-toggle input:checked { background: var(--brand); }
 .toolbar .skip-toggle input:checked::after { transform: translateX(12px); }
-.good-to-know {
-  position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: min(460px, 100%); padding: 16px 18px;
+.downloads-toolbar .anchor { position: relative; }
+.chip.skip-toggle { gap: 6px; padding-right: 6px; cursor: default; }
+.chip.skip-toggle label { display: inline-flex; align-items: center; gap: 8px; height: 100%; cursor: pointer; }
+.chip .help {
+  display: grid; place-items: center; width: 24px; height: 24px; margin-left: 2px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: none; background: var(--brand-tint); color: var(--brand); font: inherit; font-size: 13px; font-weight: 700; line-height: 1;
+  transition: background 0.15s;
+}
+.chip .help:hover, .chip .help[aria-expanded="true"] { background: var(--brand-tint-strong); }
+.skip-help { left: 0; width: 320px; }
+.skip-help b { display: block; margin-bottom: 4px; color: var(--text); font-weight: 600; }
+.good-to-know { right: 0; width: min(460px, 100%); }
+.pop-card {
+  position: absolute; z-index: 20; top: calc(100% + 8px); padding: 16px 18px;
   border-radius: 14px; background: var(--elevated); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(69, 11, 98, 0.16);
   font-size: 13.5px; color: var(--muted); opacity: 1; transform: none; transition: opacity 0.18s ease, transform 0.18s ease;
 }
-@starting-style { .good-to-know { opacity: 0; transform: translateY(-4px); } }
+@starting-style { .pop-card { opacity: 0; transform: translateY(-4px); } }
 .good-to-know ul { margin: 0; padding: 0; list-style: none; }
 .good-to-know li { margin-top: 10px; line-height: 1.45; }
 .good-to-know li:first-child { margin-top: 0; }

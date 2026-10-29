@@ -68,7 +68,7 @@ test('Download again asks the Instagram tab to download it even if downloaded be
 test('the switch turns skipping off; Forget clears the list after asking', async ({ context, extensionId }) => {
   const page = await open(context, extensionId, POSTS);
   await expect(page.locator('#skip-downloaded')).toBeChecked(); // on unless turned off
-  await page.locator('.skip-toggle').click();
+  await page.locator('.skip-toggle label').click();
   await expect.poll(() => page.evaluate(async () => (await chrome.storage.local.get('skipDownloaded')).skipDownloaded)).toBe(false);
   await expect(page.locator('.downloads-title .count-line')).toHaveText('2 downloaded');
   await page.click('#forget');
@@ -102,8 +102,16 @@ test('the head is one title line and one toolbar; "Good to know" opens by itself
   await expect(page.locator('#good-to-know')).toBeHidden();
   await page.click('#good-to-know-btn');
   await expect(page.locator('#good-to-know')).toBeVisible();
-  await page.keyboard.press('Escape');
+  // The switch's "?" opens its explanation the same way, and closes Good to know.
+  await page.click('#skip-help-btn');
+  await expect(page.locator('#skip-help')).toContainText('Skip files downloaded before');
   await expect(page.locator('#good-to-know')).toBeHidden();
+  await expect(page.locator('#skip-downloaded')).toBeChecked(); // "?" doesn't flip the switch
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: test.info().outputPath('help.png') });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#skip-help')).toBeHidden();
+  await expect(page.locator('#forget')).toHaveText('Clear download history');
   await page.click('#forget');
   await page.waitForTimeout(300);
   await page.screenshot({ path: test.info().outputPath('forget.png') });

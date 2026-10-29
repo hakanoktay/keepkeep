@@ -75,9 +75,10 @@ files"). It is a history, not a collection: no lists, no dragging.
   first; clears both stores, files stay where they are). Settings → Downloads
   points here.
 - **The head is compact** (2026-10-29, owner's request): the title line has
-  "n downloaded · Forget" on the right; under it one toolbar like Media's:
-  search, a small "Skip downloaded before" switch (its explanation in the
-  tooltip) and a "Good to know" button. Earlier the switch and the note were
+  "n downloaded · Clear download history" on the right (was "Forget"; the
+  owner wanted it clearer); under it one toolbar like Media's: search, a
+  small "Skip downloaded before" switch with a "?" that opens its explanation
+  in a card like Good to know's, and a "Good to know" button. Earlier the switch and the note were
   full-width boxes and pushed the grid ~180 px down.
 - **Good to know** (2026-10-29, owner's request): a card floating under its
   button (over the grid, so nothing moves), open by itself on the first visit

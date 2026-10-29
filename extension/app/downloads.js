@@ -59,48 +59,67 @@
   const LIMITS = [
     ["KeepKeep can't see your Downloads folder.", "Chrome doesn't let extensions look at your files, so KeepKeep remembers what it downloaded, not what is still there. A file you deleted, moved or renamed still counts as downloaded: open it here and use Download again."],
     ['Only downloads from this version on are listed.', 'What you downloaded earlier is still in your folder, just not in this list.'],
-    ['This list stays in this browser.', "It isn't part of Backup and doesn't move to another computer. Forget, or removing KeepKeep, empties it; your files stay."],
+    ['This list stays in this browser.', "It isn't part of Backup and doesn't move to another computer. Clearing the download history, or removing KeepKeep, empties it; your files stay."],
     ['A post removed from Instagram is gone.', "If its owner deletes it or hides it from you, it can't be downloaded again; the files you already have stay yours."],
   ];
-  let note = null, noteBtn = null;
-  function showNote(open) {
-    if (!note?.isConnected) return;
-    note.hidden = !open;
-    noteBtn.setAttribute('aria-expanded', String(open));
-    if (!open) try { localStorage.setItem(SEEN, '1'); } catch {}
+  // Cards under a toolbar button (Good to know, the switch's "?"): one open at
+  // a time; outside click or Escape closes them.
+  let pops = []; // [{ btn, card, onClose }]
+  function showPop(p, open) {
+    for (const o of pops) if (o !== p && !o.card.hidden) showPop(o, false);
+    p.card.hidden = !open;
+    p.btn.setAttribute('aria-expanded', String(open));
+    if (!open) p.onClose?.();
   }
-  document.addEventListener('pointerdown', (e) => { if (note && !note.hidden && !note.contains(e.target) && !noteBtn.contains(e.target)) showNote(false); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && note && !note.hidden) showNote(false); });
+  function pop(btn, card, onClose) {
+    const p = { btn, card, onClose };
+    btn.addEventListener('click', () => showPop(p, card.hidden));
+    pops.push(p);
+    return p;
+  }
+  document.addEventListener('pointerdown', (e) => {
+    for (const p of pops) if (!p.card.hidden && !p.card.contains(e.target) && !p.btn.contains(e.target)) showPop(p, false);
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const p of pops) if (!p.card.hidden) showPop(p, false); });
 
   function controls() {
     const forget = el('div', { class: 'forget' });
     const ask = () => forget.replaceChildren(
-      el('span', { text: 'Forget this list? Your files stay.' }),
-      el('button', { type: 'button', class: 'btn danger', id: 'forget-yes', onclick: async () => { await KeepKeepDownloads.forget(); idle(); load(); } }, 'Forget'),
+      el('span', { text: 'Clear the download history? Your files stay.' }),
+      el('button', { type: 'button', class: 'btn danger', id: 'forget-yes', onclick: async () => { await KeepKeepDownloads.forget(); idle(); load(); } }, 'Clear'),
       el('button', { type: 'button', class: 'btn quiet', onclick: idle }, 'Cancel'));
     const idle = () => forget.replaceChildren(countLine,
-      el('button', { type: 'button', class: 'link-btn', id: 'forget', onclick: ask }, 'Forget'));
+      el('button', { type: 'button', class: 'link-btn', id: 'forget', onclick: ask }, 'Clear download history'));
     idle();
     return el('div', { class: 'downloads-title' }, el('h1', { text: 'Downloads' }), forget);
   }
 
   function toolbar() {
+    pops = [];
     const skip = el('input', { type: 'checkbox', id: 'skip-downloaded', onchange: (e) => chrome.storage.local.set({ skipDownloaded: e.target.checked }) });
     chrome.storage.local.get('skipDownloaded').then(({ skipDownloaded }) => { skip.checked = skipDownloaded !== false; });
-    noteBtn = el('button', { type: 'button', class: 'chip', id: 'good-to-know-btn', 'aria-expanded': 'false', 'aria-controls': 'good-to-know',
-      onclick: () => showNote(note.hidden) }, icon('about'), 'Good to know');
-    note = el('div', { class: 'good-to-know', id: 'good-to-know', role: 'note', hidden: true },
+    const helpBtn = el('button', { type: 'button', class: 'help', id: 'skip-help-btn', 'aria-label': 'What does this do?', 'aria-expanded': 'false', 'aria-controls': 'skip-help', text: '?' });
+    const help = el('div', { class: 'pop-card skip-help', id: 'skip-help', role: 'note', hidden: true },
+      el('b', { text: 'Skip files downloaded before' }),
+      "KeepKeep remembers what it downloaded and doesn't save it again, so your folder gets no copies. \"Download again\" always saves it anyway.");
+    pop(helpBtn, help);
+    const noteBtn = el('button', { type: 'button', class: 'chip', id: 'good-to-know-btn', 'aria-expanded': 'false', 'aria-controls': 'good-to-know' }, icon('about'), 'Good to know');
+    const note = el('div', { class: 'pop-card good-to-know', id: 'good-to-know', role: 'note', hidden: true },
       el('ul', {}, ...LIMITS.map(([head, text]) => el('li', {}, el('b', { text: head }), ' ', text))));
+    const p = pop(noteBtn, note, () => { try { localStorage.setItem(SEEN, '1'); } catch {} });
     let seen = false;
     try { seen = localStorage.getItem(SEEN) === '1'; } catch {}
-    if (!seen) { note.hidden = false; noteBtn.setAttribute('aria-expanded', 'true'); }
+    if (!seen) { note.hidden = false; p.btn.setAttribute('aria-expanded', 'true'); }
     return el('div', { class: 'toolbar downloads-toolbar' },
       el('label', { class: 'search' }, icon('search'),
         el('input', { id: 'search', type: 'search', placeholder: 'Search owner', value: q, autocomplete: 'off',
           oninput: (e) => { q = e.target.value.trim(); paint(); } })),
       el('div', { class: 'tools' },
-        el('label', { class: 'chip skip-toggle', title: "KeepKeep remembers what it downloaded and doesn't save it again, so your folder gets no copies. \"Download again\" always saves it anyway." },
-          skip, 'Skip downloaded before'),
+        el('div', { class: 'anchor' },
+          el('div', { class: 'chip skip-toggle' },
+            el('label', {}, skip, 'Skip downloaded before'),
+            helpBtn),
+          help),
         noteBtn),
       note);
   }
