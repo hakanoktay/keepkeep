@@ -116,3 +116,10 @@ Planned features are listed in [ROADMAP.md](ROADMAP.md).
 ## Third-party
 
 [Mediabunny](https://github.com/Vanilagy/mediabunny/tree/v1.61.1) 1.61.1 (MPL-2.0, unmodified) joins and converts videos: `extension/lib/mediabunny.min.mjs`, license in `extension/lib/mediabunny.LICENSE`.
+
+## License
+
+Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. KeepKeep is
+not open source: the code is published so that anyone can see what it does;
+copying, modifying or publishing it is not allowed. See [LICENSE](LICENSE).
+`extension/lib/` (Mediabunny) has its own license, MPL-2.0.

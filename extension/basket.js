@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // URL parsing and storage shared by the content script and the popup.
 //
 // Every record lives under its own key in chrome.storage.local, so concurrent
@@ -123,14 +124,27 @@ var KeepKeep = (() => {
   const BACKUP_VERSION = 1;
   const SETTINGS = ['photoSize', 'videoQuality', 'anonStories', 'skipDownloaded'];
 
+  // A backup carries a check of its lists and items, so a file that was cut
+  // off or damaged after it was made is refused instead of half imported.
+  function digest(lists, items) {
+    const text = JSON.stringify([lists, items]);
+    let a = 0xd67b7b28, b = 1;
+    for (let i = 0; i < text.length; i++) {
+      a = Math.imul(a ^ text.charCodeAt(i), 0x01000193) >>> 0;
+      b = (b + a) % 65521;
+    }
+    return a.toString(36) + '.' + b.toString(36);
+  }
+
   async function exportData() {
     const all = await chrome.storage.local.get(null);
     await splitLists(all);
     const items = Object.fromEntries(Object.entries(all).filter(([k]) => /^[pmu]:/.test(k)));
     const settings = Object.fromEntries(SETTINGS.filter((k) => k in all).map((k) => [k, all[k]]));
+    const lists = all.lists || [];
     return {
       format: BACKUP, version: BACKUP_VERSION, app: chrome.runtime.getManifest().version,
-      exportedAt: new Date().toISOString(), lists: all.lists || [], items, settings,
+      exportedAt: new Date().toISOString(), lists, items, settings, check: digest(lists, items),
     };
   }
 
@@ -155,6 +169,7 @@ var KeepKeep = (() => {
     const plural = (n, one) => `${n} ${n === 1 ? one : one + 's'}`;
     if (result instanceof Error) {
       if (result.code === 'newer') return { ok: false, title: 'This backup was made by a newer KeepKeep.', text: 'Update KeepKeep, then import it again. Nothing was changed.' };
+      if (result.code === 'damaged') return { ok: false, title: 'This backup file is damaged.', text: 'It was changed or cut off after it was made. Export a new one, then import that. Nothing was changed.' };
       if (result.code === 'not-backup') return { ok: false, title: "This file isn't a KeepKeep backup.", text: 'Choose a KeepKeep-backup-….json file made with Export. Nothing was changed.' };
       return { ok: false, title: 'The import failed.', text: 'Please try again. Nothing was changed.' };
     }
@@ -245,6 +260,10 @@ var KeepKeep = (() => {
       throw Object.assign(new Error('Not a KeepKeep backup'), { code: 'not-backup' });
     }
     if (backup.version > BACKUP_VERSION) throw Object.assign(new Error('Made by a newer KeepKeep'), { code: 'newer' });
+    // Backups made before the check have none; they are read as they are.
+    if ('check' in backup && backup.check !== digest(backup.lists, backup.items)) {
+      throw Object.assign(new Error('Damaged backup'), { code: 'damaged' });
+    }
 
     let skipped = 0;
     const incoming = { lists: Array.isArray(backup.lists) ? backup.lists.filter((l) => l && typeof l === 'object') : [] };

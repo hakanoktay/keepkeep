@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Adds and removes profiles and media. When a drag carrying a URL enters an
 // Instagram page (from the address bar or a link on the page), shows the drop
 // card in the corner (panel.js). `run` and `remove` are shared with buttons.js.

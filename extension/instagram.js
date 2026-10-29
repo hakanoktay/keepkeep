@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Fetches profile and post details from Instagram. Runs as a content script on
 // instagram.com, so requests go out with the user's session.
 //

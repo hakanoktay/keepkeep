@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // The card in the top-right corner of Instagram: the drop target while dragging,
 // then the result of adding (with the list picker) or removing (with undo).
 // Styled after Instagram's own menus and buttons, in light and dark mode.

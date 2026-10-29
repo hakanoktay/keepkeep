@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Adds KeepKeep's Save buttons to Instagram pages:
 //   - Profile, Media and Download icons in each post's action bar, left of the
 //     save icon (home feed, post page, post modal)

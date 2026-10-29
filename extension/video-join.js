@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Joins a video's DASH files from Instagram (video and audio, each a
 // fragmented MP4) into one MP4, with Mediabunny (lib/, MPL-2.0). Loaded by the
 // offscreen document on first use.

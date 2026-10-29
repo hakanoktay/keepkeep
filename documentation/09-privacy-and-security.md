@@ -58,7 +58,9 @@ the side panel, it asks **without** your Instagram sign-in.
 - **Anonymous story viewing changes exactly one thing**: the message that
   tells Instagram you saw a story. It doesn't read, store or change anything
   else.
-- The code is public on GitHub, so anyone can check what it does.
+- The source code is public on GitHub, so anyone can check what it does. It
+  is not open source: copying or publishing it is not allowed (see the
+  license).
 
 ## The fewest permissions
 

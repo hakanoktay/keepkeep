@@ -118,6 +118,23 @@ test('a backup with 1.0.0-style shared lists is split like stored data', async (
   expect(all['m:DDD'].lists).toEqual(['o1']);
 });
 
+test('a backup changed or cut off after it was made is refused; nothing changes', async ({ context, extensionId }) => {
+  const page = await extensionPage(context, extensionId);
+  const backup = await exported(page);
+  expect(typeof backup.check).toBe('string');
+  const before = await stored(page);
+  const changed = JSON.parse(JSON.stringify(backup));
+  changed.items['m:AAA'].username = 'mallory';
+  expect(await importIt(page, changed)).toEqual({ error: 'damaged' });
+  const cut = JSON.parse(JSON.stringify(backup));
+  delete cut.items['m:BBB'];
+  expect(await importIt(page, cut)).toEqual({ error: 'damaged' });
+  expect(await stored(page)).toEqual(before);
+  // Through a real file (JSON text) the same backup still imports.
+  expect(await importIt(page, JSON.parse(JSON.stringify(backup)))).toMatchObject({ existing: 3, skipped: 0 });
+  expect(await page.evaluate(() => KeepKeep.describeImport(Object.assign(new Error(), { code: 'damaged' })).title)).toBe('This backup file is damaged.');
+});
+
 // A backup is a file from outside: anything in it that KeepKeep didn't write
 // itself, or that could load something from the internet, is left out.
 test('a tampered backup: only valid records and fields get in, nothing loads from the internet', async ({ context, extensionId }) => {

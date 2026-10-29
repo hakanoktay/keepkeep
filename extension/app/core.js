@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // The app page's core: a tiny hash router, the shared state (refreshed when
 // storage changes) and the sidebar. Views register themselves with
 // KeepKeepApp.view(); each file in app/ adds its own.

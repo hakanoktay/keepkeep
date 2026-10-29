@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // The welcome view: opens once after installing (and from About). What
 // KeepKeep does first, how to start, then the trust badges as the supporting key.
 (() => {

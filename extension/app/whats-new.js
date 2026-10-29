@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // What's new: shown once after an update that has notes. This file also runs
 // in the service worker (background.js imports it), so the decision code has
 // no DOM; the view is registered only when the app page is there.

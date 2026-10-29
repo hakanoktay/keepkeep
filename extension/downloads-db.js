@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // KeepKeep's record of what it downloaded (specs/2026-10-28-no-duplicate-downloads.md):
 // `downloaded` holds each file by Instagram's id of the photo / video
 // ({ id, top, at, dl, name }); `posts` holds each post or story downloaded

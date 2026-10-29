@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Downloads from the app page. Instagram data needs the user's own session, so
 // the work runs in the content script of an open instagram.com tab; this page
 // only picks the tab, sends the keys and says what happened.

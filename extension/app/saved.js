@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Saved media and saved profiles: grids with search, filters, sort, and chunked
 // rendering. KeepKeepApp.saved is shared with the lists and selection code.
 (() => {

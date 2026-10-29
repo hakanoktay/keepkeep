@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // KeepKeep's "veil": the anonymous-stories mode, visible like a private window.
 //  - Passes the setting to stories-main.js (page context, can't read storage)
 //    and turns on veil.css through an attribute on <html>.

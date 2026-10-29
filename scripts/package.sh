@@ -16,6 +16,7 @@ dist="$root/dist"
 fail() { echo "✗ $*" >&2; exit 1; }
 
 [ -f "$manifest" ] || fail "extension/manifest.json not found"
+[ -f "$root/LICENSE" ] || fail "LICENSE not found (it ships with the extension)"
 command -v zip >/dev/null || fail "the zip command is needed"
 
 # Plain grep/sed, so nothing beyond a standard shell is needed.
@@ -48,6 +49,8 @@ rm -f "$out"
   zip -q -r -X "$out" . \
     -x '*.DS_Store' -x '__MACOSX/*' -x '*~' -x '*.swp' -x '.*'
 )
+# The license ships with the extension (every file's notice points to it).
+(cd "$root" && zip -q -X "$out" LICENSE)
 
 files="$(unzip -Z1 "$out" | grep -vc '/$')"
 size="$(du -h "$out" | cut -f1)"

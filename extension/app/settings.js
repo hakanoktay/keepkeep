@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Settings (photo size, anonymous stories, Backup) and About. The popup keeps
 // the same switches for quick changes; both write chrome.storage.local, and
 // this page re-reads it whenever it changes.

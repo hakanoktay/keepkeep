@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // The Downloads view: every post and story KeepKeep downloaded (newest first),
 // from its record in IndexedDB (downloads-db.js; the service worker writes it
 // and says "downloads-changed"). A card opens the side panel (post-panel.js:

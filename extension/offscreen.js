@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Hidden helper page for downloads. It fetches a post's files (reporting
 // progress), joins a video's DASH files into one MP4 when the Video quality
 // setting asks for it, and hands back blob: URLs for chrome.downloads (the
@@ -17,6 +18,17 @@ function dashTooBig({ video, audio, duration }, mode) {
   const input = ((video.bandwidth || 0) + (audio?.bandwidth || 0)) * duration / 8;
   const output = mode === 'best' ? bestBitrate(video.bandwidth || 0) * duration / 8 : 0;
   return input > DASH_MAX_BYTES || output > DASH_MAX_BYTES;
+}
+
+// A built file carries a seal made from its job and its place in it, so the
+// worker uses a reply only for the job it was built for: this page outlives
+// service-worker restarts, and a late reply of an earlier job (with the same
+// file indexes) must never be saved under another job's names. The same
+// function is in background.js.
+function seal(job, index) {
+  let h = 0x90a3fcc3;
+  for (const c of `${job}:${index}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
+  return h.toString(36);
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -65,7 +77,7 @@ async function build({ job, mode, files }) {
       // `top`: the best quality there was (a photo's original size; a video
       // joined from its DASH files, or one that has none).
       const top = file.dash ? joined : !!file.fallback && !usedFallback;
-      outputs.push({ url: URL.createObjectURL(new Blob([bytes], { type: bytes.mediaType })), filename: file.filename, index, top });
+      outputs.push({ url: URL.createObjectURL(new Blob([bytes], { type: bytes.mediaType })), filename: file.filename, index, top, seal: seal(job, index) });
     }
   } catch (e) {
     for (const { url } of outputs) URL.revokeObjectURL(url); // nothing will download them now

@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // The side panel: clicking a media card slides it in from the right with the
 // post itself (Instagram's own embed view: every photo and video, the
 // caption) under KeepKeep's details — owner, date, lists, Download, Open on

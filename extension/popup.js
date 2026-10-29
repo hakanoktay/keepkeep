@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 const TYPE_LABELS = {
   photo: 'Photo', album: 'Album', video: 'Video', reel: 'Reel', story: 'Story', post: 'Post',
   'story-video': 'Story', 'story-photo': 'Story', highlight: 'Highlight',

@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Sidebar lists: the lists of the kind on screen (media view -> 'm', profiles
 // view -> 'p') with counts. Click to filter the grid, + New list, rename and
 // delete on hover, drag to reorder (pointer events, like the card in panel.js).

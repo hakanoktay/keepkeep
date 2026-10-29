@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Background work the content script can't do itself because Instagram's CDN
 // is on a different origin: making thumbnails (downloads an image, crops it to
 // a square and returns a data: URL) and downloading posts.
@@ -68,6 +69,10 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
     await ensureHelper();
     const built = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'build', job, mode, files });
     if (!built || built.error) throw new Error(built?.error || 'build failed');
+    if (built.outputs.some((o) => o.seal !== seal(job, o.index))) {
+      for (const { url } of built.outputs) chrome.runtime.sendMessage({ target: 'offscreen', type: 'revoke', url }).catch(() => {});
+      throw new Error('a reply for another download');
+    }
     for (const { url, filename, index, top } of built.outputs) {
       const id = await chrome.downloads.download({
         url, filename: `KeepKeep/${filename}`, conflictAction: 'uniquify', saveAs: false,
@@ -80,6 +85,13 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
   } finally {
     jobs.delete(job);
   }
+}
+
+// The helper page's seal on a built file (the same function is in offscreen.js).
+function seal(job, index) {
+  let h = 0x90a3fcc3;
+  for (const c of `${job}:${index}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
+  return h.toString(36);
 }
 
 function safeName(name) {
