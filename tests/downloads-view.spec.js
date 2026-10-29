@@ -4,13 +4,15 @@
 const { test, expect } = require('./fixtures');
 
 const PIC = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
-async function open(context, extensionId, posts) {
+async function open(context, extensionId, posts, { firstVisit = false } = {}) {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/app.html#about`);
-  await page.evaluate(async (posts) => {
+  await page.evaluate(async ([posts, firstVisit]) => {
     await chrome.storage.local.clear();
+    if (firstVisit) localStorage.removeItem('keepkeep.downloads.goodToKnow.seen');
+    else localStorage.setItem('keepkeep.downloads.goodToKnow.seen', '1'); // the note would cover the first cards
     for (const p of posts) await KeepKeepDownloads.putPost(p);
-  }, posts);
+  }, [posts, firstVisit]);
   await page.goto(`chrome-extension://${extensionId}/app.html#downloads`);
   await page.reload();
   return page;
@@ -66,7 +68,7 @@ test('Download again asks the Instagram tab to download it even if downloaded be
 test('the switch turns skipping off; Forget clears the list after asking', async ({ context, extensionId }) => {
   const page = await open(context, extensionId, POSTS);
   await expect(page.locator('#skip-downloaded')).toBeChecked(); // on unless turned off
-  await page.locator('.setting-toggle:has(#skip-downloaded)').click();
+  await page.locator('.skip-toggle').click();
   await expect.poll(() => page.evaluate(async () => (await chrome.storage.local.get('skipDownloaded')).skipDownloaded)).toBe(false);
   await expect(page.locator('.downloads-title .count-line')).toHaveText('2 downloaded');
   await page.click('#forget');
@@ -76,24 +78,33 @@ test('the switch turns skipping off; Forget clears the list after asking', async
   expect(await page.evaluate(async () => (await KeepKeepDownloads.posts()).length)).toBe(0);
 });
 
-test('a "Good to know" note says what KeepKeep can\'t do; folding it is remembered', async ({ context, extensionId }) => {
-  const page = await open(context, extensionId, POSTS);
+test('the head is one title line and one toolbar; "Good to know" opens by itself on the first visit only', async ({ context, extensionId }) => {
+  const page = await open(context, extensionId, POSTS, { firstVisit: true });
   const note = page.locator('#good-to-know');
-  await expect(note).toHaveAttribute('open', '');
+  await expect(note).toBeVisible();
+  await expect(page.locator('#good-to-know-btn')).toHaveAttribute('aria-expanded', 'true');
   await expect(note.locator('li')).toHaveCount(4);
   await expect(note).toContainText("KeepKeep can't see your Downloads folder.");
-  await page.screenshot({ path: test.info().outputPath('downloads.png') });
-  // The count and Forget sit on the title's line, at the right edge of the switch's box.
-  const [title, sw, fg] = await Promise.all(['h1', '.downloads-head .setting-toggle', '#forget'].map((s) => page.locator(s).boundingBox()));
-  expect(Math.abs(fg.y + fg.height / 2 - (title.y + title.height / 2))).toBeLessThan(4);
-  expect(Math.abs(fg.x + fg.width - (sw.x + sw.width))).toBeLessThan(2);
-  expect(await page.evaluate(() => document.querySelector('.setting-toggle').compareDocumentPosition(document.querySelector('#good-to-know')) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
-  await page.click('#forget');
   await page.waitForTimeout(400);
-  await page.screenshot({ path: test.info().outputPath('forget.png') });
-  await page.click('text=Cancel');
-  await note.locator('summary').click();
-  await expect(note).not.toHaveAttribute('open', '');
+  await page.screenshot({ path: test.info().outputPath('downloads-open.png') });
+  // The count and Forget sit on the title's line; their right edge is the toolbar's.
+  const [title, fg, btn, search] = await Promise.all(['h1', '#forget', '#good-to-know-btn', '#search'].map((s) => page.locator(s).boundingBox()));
+  expect(Math.abs(fg.y + fg.height / 2 - (title.y + title.height / 2))).toBeLessThan(4);
+  expect(Math.abs(fg.x + fg.width - (btn.x + btn.width))).toBeLessThan(2);
+  expect(Math.abs(btn.y - search.y)).toBeLessThan(2); // the switch and the note's button share the search's line
+  // The note floats over the grid: the grid doesn't move when it closes.
+  const before = (await page.locator('.grid').boundingBox()).y;
+  await page.mouse.click(1200, 40); // outside
+  await expect(note).toBeHidden();
+  expect((await page.locator('.grid').boundingBox()).y).toBe(before);
+  await page.screenshot({ path: test.info().outputPath('downloads.png') });
   await page.reload();
-  await expect(page.locator('#good-to-know')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#good-to-know')).toBeHidden();
+  await page.click('#good-to-know-btn');
+  await expect(page.locator('#good-to-know')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#good-to-know')).toBeHidden();
+  await page.click('#forget');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: test.info().outputPath('forget.png') });
 });

@@ -74,12 +74,18 @@ files"). It is a history, not a collection: no lists, no dragging.
   `chrome.storage.local`, in backups; on unless `false`) and **Forget** (asks
   first; clears both stores, files stay where they are). Settings → Downloads
   points here.
-- **Good to know** (2026-10-29, owner's request): a note on top of the view
-  saying the limits plainly, so a limit isn't taken for a bug: KeepKeep can't
+- **The head is compact** (2026-10-29, owner's request): the title line has
+  "n downloaded · Forget" on the right; under it one toolbar like Media's:
+  search, a small "Skip downloaded before" switch (its explanation in the
+  tooltip) and a "Good to know" button. Earlier the switch and the note were
+  full-width boxes and pushed the grid ~180 px down.
+- **Good to know** (2026-10-29, owner's request): a card floating under its
+  button (over the grid, so nothing moves), open by itself on the first visit
+  only; outside click / Escape closes it. It says the limits plainly, so a limit isn't taken for a bug: KeepKeep can't
   see the folder (deleted / moved / renamed files still count; Download
   again), only downloads from 1.1.0 on are listed, the list stays in this
   browser (not in Backup), a post removed from Instagram can't be downloaded
-  again. Open until folded; folding is remembered in `localStorage`.
+  again. "Seen" is remembered in `localStorage`.
 - **Not done: listing earlier downloads from Chrome's history** (discussed
   2026-10-29). File names give owner and date but no post code (no link, no
   Download again), pictures can't be read from disk, and history can be
