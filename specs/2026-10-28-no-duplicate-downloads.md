@@ -75,8 +75,9 @@ files"). It is a history, not a collection: no lists, no dragging.
   first; clears both stores, files stay where they are). Settings → Downloads
   points here.
 - **The head is compact** (2026-10-29, owner's request): the title line has
-  "n downloaded · Clear download history" on the right (was "Forget"; the
-  owner wanted it clearer); under it one toolbar like Media's: search, a
+  "n downloaded · Clear this list" on the right (was "Forget", then "Clear
+  download history", which read like Chrome's history; the confirmation says
+  "Clear KeepKeep's list? Your files stay."); under it one toolbar like Media's: search, a
   small "Skip downloaded before" switch with a "?" that opens its explanation
   in a card like Good to know's, and a "Good to know" button. Earlier the switch and the note were
   full-width boxes and pushed the grid ~180 px down.

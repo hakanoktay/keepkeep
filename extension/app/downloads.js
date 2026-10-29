@@ -59,7 +59,7 @@
   const LIMITS = [
     ["KeepKeep can't see your Downloads folder.", "Chrome doesn't let extensions look at your files, so KeepKeep remembers what it downloaded, not what is still there. A file you deleted, moved or renamed still counts as downloaded: open it here and use Download again."],
     ['Only downloads from this version on are listed.', 'What you downloaded earlier is still in your folder, just not in this list.'],
-    ['This list stays in this browser.', "It isn't part of Backup and doesn't move to another computer. Clearing the download history, or removing KeepKeep, empties it; your files stay."],
+    ['This list stays in this browser.', "It isn't part of Backup and doesn't move to another computer. Clearing this list, or removing KeepKeep, empties it; your files stay."],
     ['A post removed from Instagram is gone.', "If its owner deletes it or hides it from you, it can't be downloaded again; the files you already have stay yours."],
   ];
   // Cards under a toolbar button (Good to know, the switch's "?"): one open at
@@ -85,11 +85,11 @@
   function controls() {
     const forget = el('div', { class: 'forget' });
     const ask = () => forget.replaceChildren(
-      el('span', { text: 'Clear the download history? Your files stay.' }),
+      el('span', { text: "Clear KeepKeep's list? Your files stay." }),
       el('button', { type: 'button', class: 'btn danger', id: 'forget-yes', onclick: async () => { await KeepKeepDownloads.forget(); idle(); load(); } }, 'Clear'),
       el('button', { type: 'button', class: 'btn quiet', onclick: idle }, 'Cancel'));
     const idle = () => forget.replaceChildren(countLine,
-      el('button', { type: 'button', class: 'link-btn', id: 'forget', onclick: ask }, 'Clear download history'));
+      el('button', { type: 'button', class: 'link-btn', id: 'forget', onclick: ask }, 'Clear this list'));
     idle();
     return el('div', { class: 'downloads-title' }, el('h1', { text: 'Downloads' }), forget);
   }

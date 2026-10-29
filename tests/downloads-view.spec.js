@@ -111,8 +111,12 @@ test('the head is one title line and one toolbar; "Good to know" opens by itself
   await page.screenshot({ path: test.info().outputPath('help.png') });
   await page.keyboard.press('Escape');
   await expect(page.locator('#skip-help')).toBeHidden();
-  await expect(page.locator('#forget')).toHaveText('Clear download history');
+  await expect(page.locator('#forget')).toHaveText('Clear this list');
   await page.click('#forget');
   await page.waitForTimeout(300);
   await page.screenshot({ path: test.info().outputPath('forget.png') });
+  // The question fits on the title's line, inside the toolbar's width.
+  const [yes, cancel, bar] = await Promise.all(['#forget-yes', '.downloads-title .btn.quiet', '.downloads-toolbar'].map((s) => page.locator(s).boundingBox()));
+  expect(cancel.x + cancel.width).toBeLessThanOrEqual(bar.x + bar.width + 1);
+  expect(Math.abs(yes.y - cancel.y)).toBeLessThan(2);
 });
