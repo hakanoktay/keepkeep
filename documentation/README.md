@@ -49,9 +49,10 @@ review; "reviewed" = the owner went through it.
 
 ## Open points found while writing (for the owner)
 
-- Settings: both "Standard" and "Best" video quality say "(recommended)".
-  The owner asked for it earlier ("recommended 720p de olsun"); asked again
-  on 2026-10-29 whether to keep it.
+- None.
+
+Decided: both "Standard" and "Best" video quality say "(recommended)", as
+the owner asked when the options were ordered; Best stays the default.
 
 Done on 2026-10-29: the privacy policy (`docs/privacy.html`) describes the
 Downloads list, the side panel and backups; importing offers the backup's
