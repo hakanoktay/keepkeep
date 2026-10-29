@@ -8,7 +8,7 @@ Keys never fire while you type in a box, and never with ⌘, Ctrl or Alt held.
 | --- | --- | --- |
 | **D** | pointer over a post | Downloads the photo or video on screen |
 | **D** | on a post's own page | The same, wherever the pointer is |
-| **D** | in a story or highlight | Downloads the stories (see [Download stories and highlights](04-stories-and-highlights.md)) |
+| **D** | in a story or highlight | Downloads the stories (see [Anonymous story viewing and downloading](04-stories.md)) |
 | **Shift**-click | the Download button of a post | Downloads only the photo or video on screen |
 | **1**–**9** | the card after saving | Puts the item in that list, or takes it out |
 | **←** / **→** | pointer over a video | Back / forward 5 seconds |

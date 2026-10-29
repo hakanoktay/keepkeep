@@ -1,4 +1,4 @@
-# Download in full quality
+# Download in full quality (videos, photos)
 
 Download photos and videos in the best quality Instagram has, each as its own
 file, straight into `Downloads/KeepKeep`. No ZIP files, no windows, no
@@ -25,7 +25,7 @@ Download in full quality
     └── Downloads: download again
 ```
 
-Stories and highlights: see [Download stories and highlights](04-stories-and-highlights.md).
+Stories and highlights: see [Anonymous story viewing and downloading](04-stories.md).
 
 ## What happens
 
@@ -82,4 +82,4 @@ when the post was published, so files sort in the order they were posted.
 - KeepKeep downloads only from Instagram's own servers, and only photos,
   videos and sound: an expired or wrong link is never saved as a file.
 - KeepKeep doesn't download the same file twice: see
-  [No duplicate downloads](08-no-duplicate-downloads.md).
+  [No duplicate downloads](07-no-duplicate-downloads.md).

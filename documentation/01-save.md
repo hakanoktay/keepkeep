@@ -124,7 +124,7 @@ Save posts
 ### Good to know
 
 - **Saving keeps the link and a preview, not the post itself.** To keep the
-  photos and videos, download them ([Download in full quality](03-download.md)).
+  photos and videos, download them ([Download in full quality (videos, photos)](03-download.md)).
 - **Stories leave Instagram after 24 hours.** A saved story keeps its preview
   in KeepKeep, but Instagram won't show the story any more. Download it to
   keep it.

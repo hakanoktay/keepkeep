@@ -32,10 +32,10 @@ Settings
 | **Watch stories anonymously** | on · off | On for new installs |
 | **Skip downloaded before** | on · off | On |
 
-More about each: [Download in full quality](03-download.md),
-[Anonymous story viewing](05-anonymous-stories.md),
-[No duplicate downloads](08-no-duplicate-downloads.md),
-[Backup and import](09-backup.md).
+More about each: [Download in full quality (videos, photos)](03-download.md),
+[Anonymous story viewing and downloading](04-stories.md),
+[No duplicate downloads](07-no-duplicate-downloads.md),
+[Backup and import](08-backup.md).
 
 ## Good to know
 

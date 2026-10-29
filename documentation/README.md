@@ -16,16 +16,15 @@ source for what comes after it, in this order:
 | – | Home: what KeepKeep is, the features, privacy, get started | [00-overview.md](00-overview.md) | draft |
 | 1 | Save profiles and posts | [01-save.md](01-save.md) | Save profiles: reviewed · Save posts: draft |
 | 2 | Your own lists | [02-lists.md](02-lists.md) | draft |
-| 3 | Download in full quality | [03-download.md](03-download.md) | draft |
-| 4 | Download stories and highlights | [04-stories-and-highlights.md](04-stories-and-highlights.md) | draft |
-| 5 | Anonymous story viewing | [05-anonymous-stories.md](05-anonymous-stories.md) | draft |
-| 6 | Video controls | [06-video-controls.md](06-video-controls.md) | draft |
-| 7 | The KeepKeep app | [07-app.md](07-app.md) | draft |
-| 8 | No duplicate downloads | [08-no-duplicate-downloads.md](08-no-duplicate-downloads.md) | draft |
-| 9 | Backup and import | [09-backup.md](09-backup.md) | draft |
-| 10 | Private and secure by design | [10-privacy-and-security.md](10-privacy-and-security.md) | draft |
-| 11 | Settings | [11-settings.md](11-settings.md) | draft |
-| 12 | Keyboard shortcuts | [12-keyboard-shortcuts.md](12-keyboard-shortcuts.md) | draft |
+| 3 | Download in full quality (videos, photos) | [03-download.md](03-download.md) | draft |
+| 4 | Anonymous story viewing and downloading | [04-stories.md](04-stories.md) | draft |
+| 5 | Video controls | [05-video-controls.md](05-video-controls.md) | draft |
+| 6 | The KeepKeep app | [06-app.md](06-app.md) | draft |
+| 7 | No duplicate downloads | [07-no-duplicate-downloads.md](07-no-duplicate-downloads.md) | draft |
+| 8 | Backup and import | [08-backup.md](08-backup.md) | draft |
+| 9 | Private and secure by design | [09-privacy-and-security.md](09-privacy-and-security.md) | draft |
+| 10 | Settings | [10-settings.md](10-settings.md) | draft |
+| 11 | Keyboard shortcuts | [11-keyboard-shortcuts.md](11-keyboard-shortcuts.md) | draft |
 
 "draft" = written and checked against the code, waiting for the owner's
 review; "reviewed" = the owner went through it.

@@ -39,5 +39,5 @@ Your own lists
 ## Good to know
 
 - A list name can be up to 40 characters.
-- Lists are part of your [backup](09-backup.md). Importing a backup joins its
+- Lists are part of your [backup](08-backup.md). Importing a backup joins its
   lists with yours by name, so nothing is doubled.
