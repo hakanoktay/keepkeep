@@ -170,6 +170,37 @@ test('opened from a link, the stories come from the JSON in the page (deep insid
   expect(await rowsShown(tab)).toHaveLength(2);
 });
 
+// Verified on 2026-11-02 (ellaalexandra.x): opened from a link or the stories
+// row, the address is /stories/<user>/ with no id; when the first story is a
+// video there is no picture id either. The page's own stories data and the
+// progress bar tell which one it is.
+test('a video story opened without an id is found from the page\'s stories and the progress bar', async ({ context, extensionId }) => {
+  const calls = await oldApiDown(context, '{}');
+  const owner = { user: { username: 'alice', pk: '1' } };
+  await context.route(/\/api\/v1\/media\/22[23]\/info\//, (r) => r.fulfill({ contentType: 'application/json',
+    body: JSON.stringify({ items: [{ ...ITEM(r.request().url().includes('/222/') ? '222' : '223', 1719323002), ...owner }] }) }));
+  let data = { __bbox: { result: { data: { xdt_api__v1__feed__reels_media: { reels_media: [{ id: '1', user: { username: 'alice' }, items: [ITEM('222', 1719323002), ITEM('223', 1719323062)] }] } } } } };
+  for (let i = 0; i < 6; i++) data = { require: [['ScheduledServerJS', 'handle', null, [data]]] };
+  const html = require('fs').readFileSync(require('path').join(__dirname, 'pages', 'highlight-video.html'), 'utf8')
+    .replace('</body>', `<script type="application/json">${JSON.stringify(data)}</script></body>`);
+  await context.route(/\/stories\/alice\/\?video$/, (r) => r.fulfill({ contentType: 'text/html', body: html }));
+  const tab = await context.newPage();
+  await tab.setViewportSize({ width: 1280, height: 720 });
+  await tab.goto('https://www.instagram.com/stories/alice/?video');
+  await tab.mouse.move(640, 360);
+  const bar = tab.locator('[data-keepkeep="story-bar"]');
+  await expect(bar).toHaveCSS('opacity', '1', { timeout: 5000 });
+  await bar.locator('button').nth(1).click(); // Media: the story on screen (the progress bar's second)
+  const ext = await context.newPage();
+  await ext.goto(`chrome-extension://${extensionId}/popup.html`);
+  await expect.poll(async () => Object.keys(await stored(ext)).filter((k) => k.startsWith('m:'))).toEqual(['m:story:223']);
+  await tab.bringToFront();
+  await tab.mouse.move(640, 360);
+  await tab.keyboard.press('d'); // all of the account's stories
+  expect(await rowsShown(tab)).toHaveLength(2);
+  expect(calls.old).toBe(0);
+});
+
 test('the app files saved stories and highlights under Stories, with their labels', async ({ context, extensionId }) => {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/app.html`);

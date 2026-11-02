@@ -299,5 +299,14 @@ var InstaApi = (() => {
     };
   }
 
-  return { profile, media, mediaFiles, filesOf, dashOf, story, storyReel, highlight, pageHighlight, thumbnail, codeToId, fileKey };
+  // An account's current stories as the page loaded them (its reel id is the
+  // owner's id, not in the address): their ids in the viewer's order, or null.
+  function pageUserStories(username) {
+    for (const r of pageReels.values()) {
+      if (!r.id.startsWith('highlight:') && r.user.username?.toLowerCase() === username) return { pks: r.items.map((it) => String(it.pk)) };
+    }
+    return null;
+  }
+
+  return { profile, media, mediaFiles, filesOf, dashOf, story, storyReel, highlight, pageHighlight, pageUserStories, thumbnail, codeToId, fileKey };
 })();

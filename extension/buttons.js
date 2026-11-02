@@ -761,10 +761,18 @@
     const m = location.pathname.match(/^\/stories\/([A-Za-z0-9._]{1,30})\/?$/);
     if (!m || m[1] === 'highlights') return null;
     const username = m[1].toLowerCase();
-    const id = storyIdOnScreen();
+    // Opened from the stories row or a link, the address has no id for a
+    // while. A photo's id is in its picture; a video (blob:, no picture) is
+    // found from the progress bar in the stories the page loaded.
+    const pks = InstaApi.pageUserStories(username)?.pks;
+    let id = storyIdOnScreen();
+    if (!id && pks?.length) {
+      const pos = progressPosition();
+      id = pos && pos.count === pks.length ? pks[pos.index] : pks.length === 1 ? pks[0] : null;
+    }
     return id
       ? { kind: 'media', key: 'story:' + id, code: null, type: 'story', username, url: `https://www.instagram.com/stories/${username}/${id}/` }
-      : { kind: 'media', key: null, username };
+      : { kind: 'media', key: null, username, anyPk: pks?.[0] || null }; // any of its stories will do to download them all
   };
 
   function storyCard() {
@@ -849,6 +857,7 @@
     const s = currentStory();
     if (s?.highlightId) await KeepKeepDrop.downloadHighlight(s.highlightId);
     else if (s?.key) await KeepKeepDrop.downloadStory(s.key.slice(6));
+    else if (s?.anyPk) await KeepKeepDrop.downloadStory(s.anyPk); // all of the account's stories
     else KeepKeepPanel.showError("Couldn't tell which story this is");
   }
 
@@ -858,7 +867,7 @@
     if (e.metaKey || e.ctrlKey || e.altKey || !location.pathname.startsWith('/stories/')) return;
     if (e.target.closest?.('input, textarea, [contenteditable="true"]')) return;
     const s = currentStory();
-    if (!s?.key && !s?.highlightId) return;
+    if (!s?.key && !s?.highlightId && !s?.anyPk) return;
     e.preventDefault();
     e.stopPropagation();
     downloadCurrentStory();
