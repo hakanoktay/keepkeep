@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 // Fetches profile and post details from Instagram. Runs as a content script on
 // instagram.com, so requests go out with the user's session.
 //
@@ -6,6 +7,34 @@
 var InstaApi = (() => {
   const APP_ID = '936619743392459'; // fixed ID of the instagram.com web client
   const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+  // The stories Instagram's page loaded for its story viewer, handed over by
+  // stories-main.js (Instagram's page context): reel id ("highlight:<id>" or
+  // the owner's id) → { id, username, items }. Instagram's own data, so it is
+  // checked like any answer before use.
+  const pageReels = new Map();
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || e.data?.keepkeep !== 'reels' || !Array.isArray(e.data.reels)) return;
+    for (const r of e.data.reels) {
+      if (typeof r?.id !== 'string' || !/^(highlight:)?\d{1,40}$/.test(r.id) || !Array.isArray(r.items)) continue;
+      pageReels.set(r.id, { id: r.id, user: { username: typeof r.username === 'string' ? r.username : null }, items: r.items });
+    }
+  });
+  window.postMessage({ keepkeep: 'reels?' }, location.origin);
+  // A reel the page loaded; when not here (yet), asks the page once more and
+  // waits a moment for its answer.
+  async function pageReel(id) {
+    if (!pageReels.has(id)) {
+      window.postMessage({ keepkeep: 'reels?' }, location.origin);
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    return pageReels.get(id) || null;
+  }
+  // A highlight's owner and stories, from what the page loaded (no request), or null.
+  function pageHighlight(id) {
+    const r = pageReels.get('highlight:' + id);
+    return r ? { username: r.user.username?.toLowerCase() || null, pks: r.items.map((it) => String(it.pk)) } : null;
+  }
 
   async function json(path) {
     const res = await fetch(path, { credentials: 'include', headers: { 'X-IG-App-ID': APP_ID } });
@@ -129,17 +158,60 @@ var InstaApi = (() => {
     }
   }
 
-  // Every photo / video of a post (all items of an album), each in the highest
-  // resolution Instagram offers (photos in their uploaded size unless
-  // `originals` is false), plus the owner and publish time for file names.
-  // Each photo / video of an API item (all items of an album), in the largest listed size.
+  // The video's DASH manifest: its largest video and best audio, when that
+  // video is bigger than the largest single file (those stop at 720p).
+  // `fallbackHeight` is that single file's size in the "720p" sense (its
+  // shorter side: 720 for a 720x1280 reel), shown when it is saved instead.
+  // Returns null when there is no usable manifest.
+  function dashOf(m) {
+    try {
+      if (typeof m.video_dash_manifest !== 'string') return null;
+      const doc = new DOMParser().parseFromString(m.video_dash_manifest, 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) return null;
+      const videos = [];
+      const audios = [];
+      for (const r of doc.getElementsByTagName('Representation')) {
+        const mime = r.getAttribute('mimeType') || r.parentElement?.getAttribute('mimeType') || '';
+        const base = r.getElementsByTagName('BaseURL')[0]?.textContent.trim();
+        let u;
+        try { u = new URL(base); } catch { continue; }
+        if (u.protocol !== 'https:' || !/(^|\.)(cdninstagram\.com|fbcdn\.net)$/.test(u.hostname)) continue;
+        const bandwidth = Number(r.getAttribute('bandwidth')) || 0;
+        const codec = r.getAttribute('codecs') || '';
+        if (mime.startsWith('video/')) videos.push({ url: base, width: Number(r.getAttribute('width')) || 0, height: Number(r.getAttribute('height')) || 0, codec, bandwidth });
+        else if (mime.startsWith('audio/')) audios.push({ url: base, codec, bandwidth });
+      }
+      if (!videos.length) return null;
+      const area = (v) => (v.width || 0) * (v.height || 0);
+      const video = videos.reduce((a, b) => (area(b) > area(a) || (area(b) === area(a) && b.bandwidth > a.bandwidth) ? b : a));
+      const single = (m.video_versions || []).reduce((a, b) => (area(b) > area(a) ? b : a), {});
+      if (area(video) <= area(single)) return null;
+      // A video with sound but no audio file in the manifest: the single file has the sound, a join wouldn't.
+      if (!audios.length && m.has_audio === true) return null;
+      const audio = audios.length ? audios.reduce((a, b) => (b.bandwidth > a.bandwidth ? b : a)) : null;
+      return {
+        video, audio, duration: typeof m.video_duration === 'number' ? m.video_duration : null,
+        fallbackHeight: Math.min(single.width || 0, single.height || 0) || null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Each photo / video of an API item (all items of an album), in the largest
+  // listed size. `id`: Instagram's id of that photo / video (the record of
+  // files already downloaded goes by it).
   function filesOf(item) {
     const parts = item.carousel_media?.length ? item.carousel_media : [item];
     const largest = (list) => list.reduce((a, b) => ((b.width || 0) * (b.height || 0) > (a.width || 0) * (a.height || 0) ? b : a));
     return parts.map((m) => {
       const thumb = pick(m.image_versions2?.candidates, 150); // small preview (a video's cover)
-      if (m.video_versions?.length) return { url: largest(m.video_versions).url, kind: 'video', thumb };
-      if (m.image_versions2?.candidates?.length) return { url: largest(m.image_versions2.candidates).url, kind: 'image', thumb };
+      const id = m.pk != null ? String(m.pk) : m.id ? String(m.id).split('_')[0] : null;
+      if (m.video_versions?.length) {
+        const dash = dashOf(m);
+        return { id, url: largest(m.video_versions).url, kind: 'video', thumb, ...(dash && { dash }) };
+      }
+      if (m.image_versions2?.candidates?.length) return { id, url: largest(m.image_versions2.candidates).url, kind: 'image', thumb };
       return null;
     }).filter(Boolean);
   }
@@ -168,11 +240,15 @@ var InstaApi = (() => {
     let reelItems = [first];
     const userId = first.user?.pk || first.user?.id;
     if (userId) {
-      try {
-        const j = await json(`/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(userId)}`);
-        const list = j.reels?.[userId]?.items || j.reels_media?.[0]?.items;
-        if (list?.length) reelItems = list;
-      } catch {}
+      const seen = (await pageReel(String(userId)))?.items;
+      if (seen?.length) reelItems = seen;
+      else {
+        try {
+          const j = await json(`/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(userId)}`);
+          const list = j.reels?.[userId]?.items || j.reels_media?.[0]?.items;
+          if (list?.length) reelItems = list;
+        } catch {}
+      }
     }
     reelItems = [...reelItems].sort((a, b) => (a.taken_at || 0) - (b.taken_at || 0));
     return {
@@ -181,6 +257,27 @@ var InstaApi = (() => {
     };
   }
 
+  // A highlight (the id in /stories/highlights/<id>/): its owner, title and
+  // every story in it, in the highlight's order.
+  async function highlight(id) {
+    const reelId = 'highlight:' + id;
+    let reel = await pageReel(reelId);
+    if (!reel) {
+      const j = await json(`/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(reelId)}`);
+      reel = j.reels?.[reelId] || j.reels_media?.[0];
+    }
+    if (!reel) throw new Error('highlight not found');
+    return {
+      username: reel.user?.username?.toLowerCase() || null,
+      title: reel.title || null,
+      pks: (reel.items || []).map((it) => String(it.pk)), // every story, in the viewer's order
+      items: (reel.items || []).map((it) => ({ takenAt: it.taken_at || null, files: filesOf(it) })).filter((it) => it.files.length),
+    };
+  }
+
+  // Every photo / video of a post (all items of an album), each in the highest
+  // resolution Instagram offers (photos in their uploaded size unless
+  // `originals` is false), plus the owner and publish time for file names.
   async function mediaFiles(code, { originals: wantOriginals = true } = {}) {
     const { items } = await json(`/api/v1/media/${codeToId(code)}/info/`);
     const item = items[0];
@@ -202,5 +299,5 @@ var InstaApi = (() => {
     };
   }
 
-  return { profile, media, mediaFiles, story, storyReel, thumbnail, codeToId };
+  return { profile, media, mediaFiles, filesOf, dashOf, story, storyReel, highlight, pageHighlight, thumbnail, codeToId, fileKey };
 })();

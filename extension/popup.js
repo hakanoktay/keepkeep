@@ -1,7 +1,9 @@
+// Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE.
 const TYPE_LABELS = {
   photo: 'Photo', album: 'Album', video: 'Video', reel: 'Reel', story: 'Story', post: 'Post',
+  'story-video': 'Story', 'story-photo': 'Story', highlight: 'Highlight',
 };
-const TYPE_ICONS = { reel: 'reel', album: 'album', video: 'video', story: 'video' };
+const TYPE_ICONS = { reel: 'reel', album: 'album', video: 'video', story: 'video', 'story-video': 'video', 'story-photo': 'video', highlight: 'video' };
 
 const ICONS = {
   tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
@@ -168,7 +170,7 @@ function renderFooter(mode = 'view') {
   if (mode === 'confirm') {
     footer.querySelector('.question').replaceChildren(
       'Delete ', el('b', {}, `"${list.name}"`), '? ',
-      el('span', { class: 'n' }, 'Its items stay in your basket.'));
+      el('span', { class: 'n' }, 'Its items stay saved.'));
     footer.querySelector('.confirm-delete').focus();
   }
 }
@@ -256,7 +258,7 @@ function renderProfiles() {
   $('#profiles .empty').hidden = profiles.length > 0;
   $('#profiles .empty').textContent = activeList
     ? 'No profiles in this list yet. Use the tag button on a profile to add it.'
-    : 'No profiles yet. On Instagram, use the basket buttons or drag a profile link onto the page.';
+    : 'No profiles yet. On Instagram, use the KeepKeep buttons or drag a profile link onto the page.';
 
   $('#profiles ul').replaceChildren(...profiles.map((p) => {
     const n = counts[p.username] || 0;
@@ -293,7 +295,7 @@ function renderMedia() {
   $('#media .empty').hidden = list.length > 0;
   $('#media .empty').textContent = activeList
     ? 'No media in this list yet. Use the tag button on a thumbnail to add it.'
-    : 'No media yet. On Instagram, use the basket buttons or drag a post, reel or video link onto the page.';
+    : 'No media yet. On Instagram, use the KeepKeep buttons or drag a post, reel or video link onto the page.';
 
   $('#media .groups').replaceChildren(el('div', { class: 'cards' }, ...list.map((m) => mediaCard(m, saved))));
 }
@@ -328,7 +330,7 @@ function mediaCard(m, savedProfiles) {
         : el('span', { class: 'owner unknown' }, 'Owner not found'),
       m.username ? profileToggle(m.username, savedProfiles.has(m.username)) : null,
       el('button', {
-        class: 'icon-btn remove', title: 'Delete from basket', onclick: () => KeepKeep.removeMedia(m.key),
+        class: 'icon-btn remove', title: 'Remove from KeepKeep', onclick: () => KeepKeep.removeMedia(m.key),
       }, icon('trash'))),
   );
 }
@@ -379,22 +381,34 @@ $('#filter button').addEventListener('click', () => { filterUser = null; renderM
 // Same icons and states as the buttons on Instagram: brand colour to add,
 // green when saved (hover → red, click removes), Download for posts.
 
-let page = null; // { tabId, info: { profile, media } }
+let page = null; // { tabId, info: { profile, media }, state: 'asking' | 'ready' | 'unreachable' }
 
 const PAGE_ICONS = {
   profile: ['personAdd', 'personCheck', 'personRemove'],
   media: ['mediaAdd', 'mediaCheck', 'trash'],
 };
 
+// The buttons are laid out at once from the tab's address, so nothing moves
+// afterwards; the page then fills in what the address doesn't say (a post's
+// owner on /p/<code>/ takes a request to Instagram).
 async function loadPage() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.url || !KeepKeep.parse(tab.url)) return;
-  let info = null;
+  const reveal = () => document.body.classList.remove('page-unknown');
+  setTimeout(reveal, 300); // never leave the header hidden
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+  const item = tab?.url && KeepKeep.parse(tab.url);
+  if (!item) return reveal();
+  const info = item.kind === 'profile'
+    ? { profile: item.username }
+    : { profile: item.username || null, media: { key: item.key, code: item.code, storyPk: item.key.startsWith('story:') ? item.key.slice(6) : null, url: item.url } };
+  page = { tabId: tab.id, info, state: 'asking' };
+  renderPageActions();
+  reveal();
+  let answer = null;
   try {
-    info = await chrome.tabs.sendMessage(tab.id, { type: 'page-info' });
+    answer = await chrome.tabs.sendMessage(tab.id, { type: 'page-info' });
   } catch {} // Instagram tab opened before the extension was (re)loaded
-  if (!info) return;
-  page = { tabId: tab.id, info };
+  if (answer && (answer.profile || answer.media)) page.info = answer;
+  page.state = answer ? 'ready' : 'unreachable';
   renderPageActions();
 }
 
@@ -404,12 +418,25 @@ function renderPageActions() {
   $('.page-actions').hidden = !profile && !media;
   for (const b of document.querySelectorAll('.page-btn')) {
     const action = b.dataset.action;
-    const available = action === 'profile' ? !!profile : !!media;
+    const available = action === 'profile' ? !!(profile || media) : !!media;
     b.hidden = !available;
     if (!available) continue;
+    b.disabled = page.state === 'unreachable' || (action === 'profile' && !profile);
+    if (page.state === 'unreachable') {
+      b.classList.remove('saved');
+      b.replaceChildren(icon(action === 'download' ? 'download' : PAGE_ICONS[action][0]));
+      b.title = 'Reload the Instagram tab to use this';
+      continue;
+    }
     if (action === 'download') {
       b.replaceChildren(icon('download'));
       b.title = 'Download this post (best quality)';
+      continue;
+    }
+    if (action === 'profile' && !profile) {
+      b.classList.remove('saved');
+      b.replaceChildren(icon(PAGE_ICONS.profile[0]));
+      b.title = page.state === 'asking' ? 'Finding the account…' : 'Account not found';
       continue;
     }
     const saved = action === 'profile'
@@ -426,7 +453,7 @@ function renderPageActions() {
 
 for (const b of document.querySelectorAll('.page-btn')) {
   b.addEventListener('click', async () => {
-    if (!page || b.classList.contains('busy')) return;
+    if (!page || b.disabled || b.classList.contains('busy')) return;
     b.classList.add('busy');
     try {
       await chrome.tabs.sendMessage(page.tabId, { type: 'page-action', action: b.dataset.action, info: page.info });
@@ -441,7 +468,9 @@ for (const b of document.querySelectorAll('.page-btn')) {
 function openSettings(open) {
   document.body.classList.toggle('settings-open', open);
   document.body.classList.toggle('settings-closing', !open);
-  $('#settings-view').setAttribute('aria-hidden', String(!open));
+  // The hidden pane is display:none (hidden from screen readers too); move
+  // focus to the pane now shown, so it never stays on a hidden button.
+  $(open ? '#settings-back' : '#settings').focus();
   if (open) renderSettings();
 }
 $('#settings').addEventListener('click', () => openSettings(true));
@@ -451,12 +480,15 @@ document.addEventListener('keydown', (e) => {
 });
 
 async function renderSettings() {
-  const { photoSize, anonStories } = await chrome.storage.local.get(['photoSize', 'anonStories']);
+  const { photoSize, videoQuality, anonStories } = await chrome.storage.local.get(['photoSize', 'videoQuality', 'anonStories']);
   $('#anon-stories').checked = anonStories === true;
   for (const input of document.querySelectorAll('input[name=photo-size]')) {
     input.checked = input.value === (photoSize === 'standard' ? 'standard' : 'original');
   }
-  $('.settings-footer .version').textContent = 'v' + chrome.runtime.getManifest().version;
+  for (const input of document.querySelectorAll('input[name=video-quality]')) {
+    input.checked = input.value === (videoQuality === 'original' || videoQuality === 'standard' ? videoQuality : 'best');
+  }
+  $('.about .version').textContent = 'v' + chrome.runtime.getManifest().version;
 }
 $('#anon-stories').addEventListener('change', (e) => chrome.storage.local.set({ anonStories: e.target.checked }));
 // Like a private window: the mask button in the header switches anonymous
@@ -479,8 +511,38 @@ renderAnon();
 for (const input of document.querySelectorAll('input[name=photo-size]')) {
   input.addEventListener('change', () => chrome.storage.local.set({ photoSize: input.value }));
 }
+for (const input of document.querySelectorAll('input[name=video-quality]')) {
+  input.addEventListener('change', () => chrome.storage.local.set({ videoQuality: input.value }));
+}
 loadPage();
 
 chrome.storage.onChanged.addListener(render);
 selectTab('profiles');
 render();
+
+// ---- Backup ----
+// Export saves one file straight to Downloads/KeepKeep, like every download.
+// Import needs a file picker, which can close the popup, so it lives on the app page.
+
+$('#export').addEventListener('click', async () => {
+  const status = $('#backup-status');
+  status.classList.remove('bad');
+  status.textContent = 'Exporting…';
+  try {
+    status.textContent = `Saved to Downloads/KeepKeep as ${await KeepKeep.downloadBackup()}`;
+  } catch {
+    status.classList.add('bad');
+    status.textContent = 'Export failed. Please try again.';
+  }
+});
+
+$('#import').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'app.html#settings' });
+  window.close();
+});
+
+// ---- The full-tab app ----
+$('#open-app').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'app.html#media' });
+  window.close();
+});

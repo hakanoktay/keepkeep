@@ -1,0 +1,35 @@
+KeepKeep
+Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved.
+
+KeepKeep is not open-source software. Its source code is published so that
+anyone can see what the extension does and check that it keeps its privacy
+promises. Reading and reviewing the code for that purpose is allowed.
+
+Without the copyright holder's written permission, you may not:
+
+  - copy the code, in whole or in part, except as needed to read it;
+  - modify, translate or adapt it, or create works based on it;
+  - publish, distribute, sublicense or sell it, or any work based on it,
+    including in the Chrome Web Store or any other extension store;
+  - use it, in whole or in part, to build another product or service;
+  - remove or change this notice or the copyright notices in the files.
+
+You may install KeepKeep from its official Chrome Web Store listing and use it
+for yourself:
+https://chromewebstore.google.com/detail/jelnnpodemcgdhehjokojjbahgjjgmeb
+
+The name "KeepKeep" and its logo identify this extension and may not be used
+for other products.
+
+GitHub's Terms of Service let GitHub users view and fork public repositories
+on GitHub. A fork gives no right beyond those terms and this license.
+
+Third-party code: extension/lib/ contains Mediabunny, which is licensed under
+the Mozilla Public License 2.0 (extension/lib/mediabunny.LICENSE, source:
+https://github.com/Vanilagy/mediabunny). This license does not apply to it.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+Permission requests and questions: https://github.com/hakanoktay/keepkeep/issues

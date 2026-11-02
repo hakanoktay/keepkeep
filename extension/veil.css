@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 Hakan Oktay (Zetasis). All rights reserved. Not open source: see LICENSE. */
 /* KeepKeep "veil": how Instagram looks while stories are watched anonymously.
    Everything here is inert unless veil.js sets data-keepkeep-anon-stories="1"
    on <html>. Instagram (Meta) takes its colours from CSS variables declared on
