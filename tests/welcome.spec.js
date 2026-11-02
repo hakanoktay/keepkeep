@@ -43,6 +43,8 @@ test('a new install starts with anonymous stories on', async ({ context, extensi
 test('the welcome says whether anonymous stories are on right now, and follows the setting', async ({ context, extensionId }) => {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/app.html#about`);
+  // Installing turns anonymous stories on; wait for that before turning them off.
+  await expect.poll(() => page.evaluate(async () => (await chrome.storage.local.get('anonStories')).anonStories)).toBe(true);
   await page.evaluate(() => chrome.storage.local.set({ anonStories: false }));
   await page.goto(`chrome-extension://${extensionId}/app.html#welcome`);
   const note = page.locator('#anon-note');

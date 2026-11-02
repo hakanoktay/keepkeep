@@ -680,11 +680,13 @@
     }
   }
 
-  // Instagram's data for a highlight, asked once per highlight: its owner and
-  // the ids of its stories in the viewer's order. null while asking or if it
-  // couldn't be read.
+  // Instagram's data for a highlight: its owner and the ids of its stories in
+  // the viewer's order. From what the page loaded, else asked once per
+  // highlight. null while asking or if it couldn't be read.
   const highlights = new Map(); // highlight id → { username, pks } | null
   function highlightData(id) {
+    const seen = InstaApi.pageHighlight(id); // what the page itself loaded
+    if (seen) return seen;
     if (!highlights.has(id)) {
       highlights.set(id, null);
       InstaApi.highlight(id).then((h) => highlights.set(id, { username: h.username, pks: h.pks }), () => {});

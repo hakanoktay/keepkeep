@@ -38,7 +38,7 @@ There is no build step; `extension/` is loaded unpacked as is.
 | Path | What |
 | --- | --- |
 | `extension/manifest.json` | MV3 manifest, version, content script order |
-| `extension/stories-main.js` | MAIN world, `document_start`: wraps fetch/XHR and answers the "story seen" request locally when anonymous mode is on |
+| `extension/stories-main.js` | MAIN world, `document_start`: wraps fetch/XHR and answers the "story seen" request locally when anonymous mode is on; also reads the story viewer's reels from the page's GraphQL answers and the HTML's inline JSON (`reels_media`) and posts them (`{keepkeep: 'reels'}`) to `instagram.js` (`pageReels`, `pageHighlight`), which uses them before the old endpoint |
 | `extension/veil.js`, `veil.css` | Anonymous-mode theme ("the veil"): purple tint via Instagram's CSS variables, story rings (89px canvases tinted with a filter), mask badges, capsule, reply/reaction warnings, the "will be able to see" gate answer |
 | `extension/basket.js` | Storage of saved profiles / media / lists |
 | `extension/instagram.js` | Instagram data: `mediaFiles(code, {originals})`, `embedOriginals`, `story(pk)`, `storyReel(pk)`, `filesOf`, `fileKey`, `dashOf(item)` (1080p DASH info: `dash = {video, audio|null, duration, fallbackHeight}`, only when larger than the largest `video_versions` entry; `filesOf` adds it to video files) |
@@ -91,6 +91,7 @@ There is no build step; `extension/` is loaded unpacked as is.
   per item, count = items) indexed into that list. Opened from a link,
   Instagram shows the "View as …?" gate first. Saved highlight stories:
   `m:story:<pk>` with `type: 'highlight'`, `highlightId`.
+- **`/api/v1/feed/reels_media/` answers 500 (verified 2026-11-02)** for highlights and for an account's stories, every account; `/api/v1/media/<pk>/info/` still works. The page now loads the viewer's reels with GraphQL (`PolarisStoriesV3HighlightsPageQuery`, field `xdt_api__v1__feed__reels_media__connection`, items in the v1 shape; `video_versions` without width/height) or, opened from a link, as inline JSON (`xdt_api__v1__feed__reels_media.reels_media`, ~15 levels deep in `require`/`__bbox`). Story reel id = the owner's pk. Don't call GraphQL ourselves (doc_ids change); read what the page loaded.
 - **Saved stories' type** is what Instagram reports (`story-video`,
   `story-photo`); classify stories by the `story:` key, not by type.
 - **Rate limits (2026-10-04):** `/api/v1/users/<id>/info/` and

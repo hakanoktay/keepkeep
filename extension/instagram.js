@@ -8,6 +8,34 @@ var InstaApi = (() => {
   const APP_ID = '936619743392459'; // fixed ID of the instagram.com web client
   const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
+  // The stories Instagram's page loaded for its story viewer, handed over by
+  // stories-main.js (Instagram's page context): reel id ("highlight:<id>" or
+  // the owner's id) → { id, username, items }. Instagram's own data, so it is
+  // checked like any answer before use.
+  const pageReels = new Map();
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || e.data?.keepkeep !== 'reels' || !Array.isArray(e.data.reels)) return;
+    for (const r of e.data.reels) {
+      if (typeof r?.id !== 'string' || !/^(highlight:)?\d{1,40}$/.test(r.id) || !Array.isArray(r.items)) continue;
+      pageReels.set(r.id, { id: r.id, user: { username: typeof r.username === 'string' ? r.username : null }, items: r.items });
+    }
+  });
+  window.postMessage({ keepkeep: 'reels?' }, location.origin);
+  // A reel the page loaded; when not here (yet), asks the page once more and
+  // waits a moment for its answer.
+  async function pageReel(id) {
+    if (!pageReels.has(id)) {
+      window.postMessage({ keepkeep: 'reels?' }, location.origin);
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    return pageReels.get(id) || null;
+  }
+  // A highlight's owner and stories, from what the page loaded (no request), or null.
+  function pageHighlight(id) {
+    const r = pageReels.get('highlight:' + id);
+    return r ? { username: r.user.username?.toLowerCase() || null, pks: r.items.map((it) => String(it.pk)) } : null;
+  }
+
   async function json(path) {
     const res = await fetch(path, { credentials: 'include', headers: { 'X-IG-App-ID': APP_ID } });
     if (!res.ok) throw new Error(`${path}: ${res.status}`);
@@ -212,11 +240,15 @@ var InstaApi = (() => {
     let reelItems = [first];
     const userId = first.user?.pk || first.user?.id;
     if (userId) {
-      try {
-        const j = await json(`/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(userId)}`);
-        const list = j.reels?.[userId]?.items || j.reels_media?.[0]?.items;
-        if (list?.length) reelItems = list;
-      } catch {}
+      const seen = (await pageReel(String(userId)))?.items;
+      if (seen?.length) reelItems = seen;
+      else {
+        try {
+          const j = await json(`/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(userId)}`);
+          const list = j.reels?.[userId]?.items || j.reels_media?.[0]?.items;
+          if (list?.length) reelItems = list;
+        } catch {}
+      }
     }
     reelItems = [...reelItems].sort((a, b) => (a.taken_at || 0) - (b.taken_at || 0));
     return {
@@ -229,8 +261,11 @@ var InstaApi = (() => {
   // every story in it, in the highlight's order.
   async function highlight(id) {
     const reelId = 'highlight:' + id;
-    const j = await json(`/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(reelId)}`);
-    const reel = j.reels?.[reelId] || j.reels_media?.[0];
+    let reel = await pageReel(reelId);
+    if (!reel) {
+      const j = await json(`/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(reelId)}`);
+      reel = j.reels?.[reelId] || j.reels_media?.[0];
+    }
     if (!reel) throw new Error('highlight not found');
     return {
       username: reel.user?.username?.toLowerCase() || null,
@@ -264,5 +299,5 @@ var InstaApi = (() => {
     };
   }
 
-  return { profile, media, mediaFiles, filesOf, dashOf, story, storyReel, highlight, thumbnail, codeToId, fileKey };
+  return { profile, media, mediaFiles, filesOf, dashOf, story, storyReel, highlight, pageHighlight, thumbnail, codeToId, fileKey };
 })();

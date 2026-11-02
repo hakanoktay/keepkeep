@@ -32,6 +32,16 @@ async function openHighlight(context, page = 'highlight') {
 }
 
 const stored = (page) => page.evaluate(() => chrome.storage.local.get(null));
+// The files listed in the download card. The test CDN can't serve the files,
+// so the card soon turns to "Couldn't download"; the rows are caught while shown.
+async function rowsShown(tab) {
+  const names = tab.locator('#keepkeep-downloads .bubble.item .name');
+  for (const end = Date.now() + 5000; Date.now() < end; await tab.waitForTimeout(20)) {
+    const list = await names.allTextContents();
+    if (list.length) return list;
+  }
+  return [];
+}
 
 test('a highlight address is not a user called "highlights"', async ({ context, extensionId }) => {
   const page = await context.newPage();
@@ -80,10 +90,84 @@ test('Download (and D) saves the whole highlight, named …_highlight', async ({
   const calls = await fakeApi(context);
   const { tab } = await openHighlight(context);
   await tab.keyboard.press('d');
-  const names = tab.locator('#keepkeep-downloads .bubble.item .name');
-  await expect(names).toHaveCount(2);
-  for (const n of await names.allTextContents()) expect(n).toMatch(/^alice_\d{10}_highlight\.jpg$/);
+  const names = await rowsShown(tab);
+  expect(names).toHaveLength(2);
+  for (const n of names) expect(n).toMatch(/^alice_\d{10}_highlight\.jpg$/);
   expect(calls.highlight).toBeGreaterThanOrEqual(1);
+});
+
+// Since 2026-11 Instagram's /api/v1/feed/reels_media/ answers 500, and its
+// page loads the story viewer's stories through GraphQL. KeepKeep takes them
+// from what the page loaded (stories-main.js), with Instagram's own shape.
+const gqlReel = (id, items) => JSON.stringify({ data: { xdt_api__v1__feed__reels_media__connection: {
+  edges: [{ node: { __typename: 'XDTReelDict', id, user: { username: 'alice', pk: '1' }, items: items.map((it) => ({ ...it, story_bloks_stickers: [], viewers: [] })) } }],
+  page_info: { has_next_page: false } } }, extensions: {} });
+async function oldApiDown(context, body) {
+  const calls = { old: 0 };
+  await context.route(/\/api\/v1\/feed\/reels_media\//, (r) => { calls.old++; r.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"We\'re sorry, but something went wrong.","status":"fail"}' }); });
+  await context.route(/\/graphql\/query/, (r) => r.fulfill({ contentType: 'application/json', body }));
+  return calls;
+}
+// The page's own GraphQL request, as Instagram's viewer makes it (an XHR in the page).
+const pageLoads = (tab) => tab.evaluate(() => new Promise((done) => {
+  const x = new XMLHttpRequest();
+  x.open('POST', '/graphql/query');
+  x.onload = done;
+  x.send('fb_api_req_friendly_name=PolarisStoriesV3HighlightsPageQuery');
+}));
+
+test('a highlight downloads from what the page loaded when Instagram\'s old address fails', async ({ context }) => {
+  await oldApiDown(context, gqlReel('highlight:111', [ITEM('222', 1719323002), ITEM('223', 1719323062), ITEM('224', 1719323122)]));
+  const { tab } = await openHighlight(context);
+  await pageLoads(tab);
+  await tab.keyboard.press('d');
+  const names = await rowsShown(tab);
+  expect(names).toHaveLength(3);
+  for (const n of names) expect(n).toMatch(/^alice_\d{10}_highlight\.jpg$/);
+});
+
+test('a video story of a highlight is found from what the page loaded', async ({ context, extensionId }) => {
+  const calls = await oldApiDown(context, gqlReel('highlight:111', [ITEM('222', 1719323002), ITEM('223', 1719323062)]));
+  const { tab, buttons } = await openHighlight(context, 'highlight-video');
+  await pageLoads(tab);
+  await buttons.nth(1).click(); // Media
+  const ext = await context.newPage();
+  await ext.goto(`chrome-extension://${extensionId}/popup.html`);
+  await expect.poll(async () => (await stored(ext))['m:story:223']?.type).toBe('highlight');
+  expect(calls.old).toBeLessThanOrEqual(1); // asked at most once before the page's data came
+});
+
+test('an account\'s stories download from what the page loaded when the old address fails', async ({ context }) => {
+  const owner = { user: { username: 'alice', pk: '1' } };
+  await oldApiDown(context, gqlReel('1', [ITEM('221', 1719323000), ITEM('222', 1719323002), ITEM('223', 1719323062)]));
+  await context.route(/\/api\/v1\/media\/222\/info\//, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ items: [{ ...ITEM('222', 1719323002), ...owner }] }) }));
+  const tab = await context.newPage();
+  await tab.setViewportSize({ width: 1280, height: 720 });
+  await tab.goto('https://www.instagram.com/stories/alice/222/?page=highlight');
+  await pageLoads(tab);
+  await tab.mouse.move(640, 360);
+  await tab.keyboard.press('d');
+  const names = await rowsShown(tab);
+  expect(names).toHaveLength(3);
+  for (const n of names) expect(n).toMatch(/^alice_\d{10}_story(_\d)?\.jpg$/);
+});
+
+test('opened from a link, the stories come from the JSON in the page (deep inside, as on Instagram)', async ({ context }) => {
+  const owner = { user: { username: 'alice', pk: '1' } };
+  await oldApiDown(context, '{}');
+  await context.route(/\/api\/v1\/media\/222\/info\//, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ items: [{ ...ITEM('222', 1719323002), ...owner }] }) }));
+  // Instagram's shape: require → … → __bbox → result → data → xdt_api__v1__feed__reels_media → reels_media.
+  let data = { __bbox: { result: { data: { xdt_api__v1__feed__reels_media: { reels_media: [{ id: '1', user: { username: 'alice' }, items: [ITEM('221', 1719323000), ITEM('222', 1719323002)] }] } } } } };
+  for (let i = 0; i < 6; i++) data = { require: [['ScheduledServerJS', 'handle', null, [data]]] };
+  const html = require('fs').readFileSync(require('path').join(__dirname, 'pages', 'highlight.html'), 'utf8')
+    .replace('</body>', `<script type="application/json">${JSON.stringify(data)}</script></body>`);
+  await context.route(/\/stories\/alice\/222\/\?inline$/, (r) => r.fulfill({ contentType: 'text/html', body: html }));
+  const tab = await context.newPage();
+  await tab.setViewportSize({ width: 1280, height: 720 });
+  await tab.goto('https://www.instagram.com/stories/alice/222/?inline');
+  await tab.mouse.move(640, 360);
+  await tab.keyboard.press('d');
+  expect(await rowsShown(tab)).toHaveLength(2);
 });
 
 test('the app files saved stories and highlights under Stories, with their labels', async ({ context, extensionId }) => {
