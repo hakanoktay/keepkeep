@@ -23,13 +23,14 @@ changing how the card behaves, so a rejected idea doesn't come back.
   under the card doesn't scroll. Following comes back with "Back to current"
   (the "+n more" line turns into it) or 1.5 s after the pointer leaves the
   card.
-- **Stop** (✕ in the header, 2026-11-02, the owner's request: a big album
-  started by mistake shouldn't have to run to the end). Stops every running
-  download in the card and the posts still waiting (the app's queue). Files
-  already saved stay (they show ✓ and count in "n of N saved"); the file on
-  the way and the rest show a grey ✕ "Stopped" and are never fetched. Header:
-  "Stopping…", then "Download stopped · 2 of 5 files saved" (or "Nothing was
-  saved"). The first stopped file takes the fixed place.
+- **Stop** (■ in the header, next to the chevron; 2026-11-02, the owner's
+  request: a big album started by mistake shouldn't have to run to the end).
+  Stops every running download in the card and the posts still waiting (the
+  app's queue). Files already saved stay, with their ✓; the file on the way
+  and the rest are never fetched and **leave the list**; the card shrinks to
+  what was saved. Header: "Stopping…", then "Download stopped · 2 of 5 files
+  saved" (or "Nothing was saved"). Whatever hasn't answered 4 s after Stop is
+  ended by the card itself, so it never stays at "Stopping…".
 - **Minimise** (the chevron) is on every download, a single file too; folded,
   the header says "x of y saved · n%".
 - **Click-through only over KeepKeep's own buttons** (`[data-keepkeep]`):
@@ -58,6 +59,13 @@ changing how the card behaves, so a rejected idea doesn't come back.
 - **Fading the card whenever the pointer is over it, or over anything
   clickable under it:** the card kept going transparent. Now only over
   KeepKeep's own buttons.
+
+- **Stop as a ✕, and a grey ✕ "Stopped" row for every file not saved**
+  (2026-11-02): the ✕ read as "close the card", and a big album filled the
+  list with ✕s. Rejected by the owner the same day: Stop is a ■, files not
+  saved leave the list.
+- **Stop as the word "Stop"**: clear, but the pill cut the header's title
+  ("Downloading 5…") in the 340 px card.
 
 ## Considered, not done (yet)
 
