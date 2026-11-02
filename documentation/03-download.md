@@ -58,9 +58,9 @@ KeepKeep joins them into one MP4.
 
 | Video quality | What you get |
 | --- | --- |
-| **Best** (default) | Up to 1080p, converted so it opens on every device and app. Takes a few seconds longer. |
+| Best | Up to 1080p, converted so it opens on every device and app. Takes a few seconds longer. |
 | Original | Up to 1080p, exactly as Instagram stores it. Instant and smaller, but QuickTime, Photos, iMovie and iPhone can't open it. |
-| Standard (recommended) | Up to 720p, Instagram's own single file. Instant, opens everywhere. |
+| **Standard** (default, recommended) | Up to 720p, Instagram's own single file. Instant, opens everywhere. |
 
 - A video uploaded in 720p is the same in all three.
 - **A download never fails because of the quality.** If Best can't convert a

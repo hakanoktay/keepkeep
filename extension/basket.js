@@ -228,7 +228,7 @@ var KeepKeep = (() => {
   const SETTING_VALUES = { photoSize: ['original', 'standard'], videoQuality: ['best', 'original', 'standard'], anonStories: [true, false], skipDownloaded: [true, false] };
   const settingNow = {
     photoSize: (v) => (v === 'standard' ? 'standard' : 'original'),
-    videoQuality: (v) => (v === 'original' || v === 'standard' ? v : 'best'),
+    videoQuality: (v) => (v === 'original' || v === 'best' ? v : 'standard'),
     anonStories: (v) => v === true,
     skipDownloaded: (v) => v !== false,
   };

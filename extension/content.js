@@ -338,11 +338,12 @@ var KeepKeepDrop = (() => {
     save(job, username, files, videoQuality, true).catch(() => KeepKeepPanel.downloads.fail(job, "Couldn't download these files"));
   }
 
-  // The Video quality setting: 'original' or 'standard' as stored, anything
-  // else (nothing stored, an unknown value) 'best'. Videos with Instagram's
-  // DASH files come up to 1080p in Best / Original; Standard is the single file.
+  // The Video quality setting: 'original' or 'best' as stored, anything else
+  // (nothing stored, an unknown value) 'standard': the default, since 1080p
+  // files are big and slow to join. Videos with Instagram's DASH files come up
+  // to 1080p in Best / Original; Standard is the single file.
   function videoMode(stored) {
-    return stored === 'original' || stored === 'standard' ? stored : 'best';
+    return stored === 'original' || stored === 'best' ? stored : 'standard';
   }
 
   // 2025-07-27 14:32 → "2507271432" (local time)

@@ -43,7 +43,7 @@ There is no build step; `extension/` is loaded unpacked as is.
 | `extension/basket.js` | Storage of saved profiles / media / lists |
 | `extension/instagram.js` | Instagram data: `mediaFiles(code, {originals})`, `embedOriginals`, `story(pk)`, `storyReel(pk)`, `filesOf`, `fileKey`, `dashOf(item)` (1080p DASH info: `dash = {video, audio|null, duration, fallbackHeight}`, only when larger than the largest `video_versions` entry; `filesOf` adds it to video files) |
 | `extension/panel.js` | In-page "add to list" card |
-| `extension/content.js` | `download(code)`, `downloadStory(pk)`, `pageInfo`; normalises `videoQuality` (missing/other → `best`) and sends `mode` + `dash` |
+| `extension/content.js` | `download(code)`, `downloadStory(pk)`, `pageInfo`; normalises `videoQuality` (missing/other → `standard`, the owner's default since 2026-11-02) and sends `mode` + `dash` |
 | `extension/video-join.js` | ES module, `import()`ed by the offscreen document: `joinDash({video, audio, mode, duration, onProgress, canEncode, signal})` → `{bytes, mode}`. Best = H.264 at 3× source bitrate clamped 4–12 Mbps (hardware encoder, then software, else Original); > 600 s → Original; unusable audio → throws; Original retry if the Best video track is refused |
 | `extension/lib/` | `mediabunny.min.mjs` = Mediabunny 1.61.1 (MPL-2.0, unmodified), `mediabunny.LICENSE`, `README.md` (source: https://github.com/Vanilagy/mediabunny). Keep the license file when updating |
 | `extension/buttons.js` | Profile / Media / Download buttons on posts, reels, profiles; the story hover pill; D key |
@@ -119,7 +119,9 @@ There is no build step; `extension/` is loaded unpacked as is.
   be served as `audio/mp4`. Measured on a 43 s 1080x1920 reel: Best (H.264
   High ~6.7 Mbps + HE-AAC) took 13.9 s end to end and gave 36 MB that macOS
   Quick Look opens; Original (VP9) is instant, 12 MB, and Quick Look can't
-  open it. Hence Best is the default.
+  open it. Best was the default until 2026-11-02; now **Standard** is (the
+  owner's decision: 1080p files are big and joining can take long). Don't
+  raise it again.
 
 ## Hard-won fixes (don't regress)
 

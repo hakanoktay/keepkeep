@@ -78,7 +78,7 @@ base.test('an update from 1.0.0 keeps every saved record and setting, and shows 
     await expect(tab.locator('.card[data-key="p:alice"] .chip')).toHaveText(['Designers']);
     // New settings read as their defaults; old ones as they were.
     await tab.goto(`chrome-extension://${id}/app.html#settings`);
-    await expect(tab.locator('input[name=video-quality][value=best]')).toBeChecked();
+    await expect(tab.locator('input[name=video-quality][value=standard]')).toBeChecked();
     await expect(tab.locator('input[name=photo-size][value=standard]')).toBeChecked();
   } finally {
     await context.close();

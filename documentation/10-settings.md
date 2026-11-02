@@ -28,7 +28,7 @@ Settings
 | Setting | Options | Starts as |
 | --- | --- | --- |
 | **Photo size** | Original: as uploaded, up to 3072 px wide · Standard: up to 1080 px wide | Original |
-| **Video quality** | Best: up to 1080p, opens everywhere · Original: up to 1080p, as Instagram stores it · Standard: up to 720p, instant | Best |
+| **Video quality** | Standard: up to 720p, instant, opens everywhere (recommended) · Original: up to 1080p, as Instagram stores it · Best: up to 1080p, converted so it opens everywhere | Standard |
 | **Watch stories anonymously** | on · off | On for new installs |
 | **Skip downloaded before** | on · off | On |
 

@@ -486,7 +486,7 @@ async function renderSettings() {
     input.checked = input.value === (photoSize === 'standard' ? 'standard' : 'original');
   }
   for (const input of document.querySelectorAll('input[name=video-quality]')) {
-    input.checked = input.value === (videoQuality === 'original' || videoQuality === 'standard' ? videoQuality : 'best');
+    input.checked = input.value === (videoQuality === 'original' || videoQuality === 'best' ? videoQuality : 'standard');
   }
   $('.about .version').textContent = 'v' + chrome.runtime.getManifest().version;
 }

@@ -51,9 +51,9 @@ review; "reviewed" = the owner went through it.
 
 - None.
 
-Decided (2026-10-29): only "Standard" video quality says "(recommended)";
-Best re-encodes the video, so the owner doesn't recommend it. Best is still
-the default (asked the owner whether to keep it).
+Decided (2026-11-02): Standard is the default video quality and the only
+"(recommended)" one; Best re-encodes the video and 1080p files can be big
+and slow.
 
 Done on 2026-10-29: the privacy policy (`docs/privacy.html`) describes the
 Downloads list, the side panel and backups; importing offers the backup's

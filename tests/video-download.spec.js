@@ -189,9 +189,9 @@ test('Original: one MP4 with the DASH video (VP9) and audio (AAC) joined', async
   expect(r.shown.at(-1)).toBe(kb(r.files[0])); // no "· 720p": it is the 1080p file
 });
 
-test('Best (nothing stored): the video converted to H.264, the balloon says Converting', async ({ context, extensionId }) => {
+test('Best: the video converted to H.264, the balloon says Converting', async ({ context, extensionId }) => {
   test.skip(!await encodesH264(context, extensionId), NO_H264);
-  const r = await download(context, extensionId, { item: video(MPD_1080) });
+  const r = await download(context, extensionId, { item: video(MPD_1080), quality: 'best' });
   expect(r.files).toHaveLength(1);
   expect(await tracks(r.ext, r.files[0])).toEqual({ video: ['avc'], audio: ['aac'] });
   expect(r.shown.some((t) => /^Converting \d{1,3}%$/.test(t))).toBe(true);
@@ -199,11 +199,15 @@ test('Best (nothing stored): the video converted to H.264, the balloon says Conv
   expect(r.shown.at(-1)).toBe(kb(r.files[0]));
 });
 
-test('a stray stored value counts as Best', async ({ context, extensionId }) => {
-  const r = await download(context, extensionId, { item: video(MPD_1080), quality: 'ultra' });
-  expect(r.shown.some((t) => /^Converting \d{1,3}%$/.test(t))).toBe(true);
-  expect(r.files).toHaveLength(1);
-});
+// Standard is the default (the owner's choice: 1080p files are big and slow to join).
+for (const quality of [undefined, 'ultra']) {
+  test(`${quality ? 'a stray stored value' : 'nothing stored'} counts as Standard: the 720p single file`, async ({ context, extensionId }) => {
+    const r = await download(context, extensionId, { item: video(MPD_1080), quality });
+    expect(r.files).toHaveLength(1);
+    expect(r.files[0].equals(PROG)).toBe(true);
+    expect(r.requested['v1080.mp4']).toBeUndefined();
+  });
+}
 
 test('Standard: the 720p single file as today, the DASH files never asked for', async ({ context, extensionId }) => {
   const r = await download(context, extensionId, { item: video(MPD_1080), quality: 'standard' });
@@ -224,7 +228,7 @@ test('a DASH file that answers 404: the single file instead, the balloon done (n
 });
 
 test('DASH files that cannot be joined: the single file instead', async ({ context, extensionId }) => {
-  const r = await download(context, extensionId, { item: video(MPD_1080), broken: { 'a.mp4': Buffer.from([1, 2, 3]) } });
+  const r = await download(context, extensionId, { item: video(MPD_1080), quality: 'best', broken: { 'a.mp4': Buffer.from([1, 2, 3]) } });
   expect(r.files).toHaveLength(1);
   expect(r.files[0].equals(PROG)).toBe(true);
   expect(r.requested).toMatchObject({ 'v1080.mp4': 1, 'a.mp4': 1, 'p.mp4': 1 });
@@ -359,7 +363,7 @@ test('with "Skip files downloaded before" off, the same photo is downloaded agai
 });
 
 // Stop in the card: the files saved so far stay, the file on the way and the
-// ones not started are dropped (never fetched), and the card says so.
+// ones not started are never fetched and leave the list; the card says so.
 test('Stop in the card keeps the files saved so far and drops the rest', async ({ context, extensionId }) => {
   const pic = (n) => ({ media_type: 1, image_versions2: { candidates: [{ url: `${V}t51/B${n}.jpg?stp=dst-jpg_e35_p1080x1080`, width: 1080, height: 1080 }] } });
   await context.route(/\/api\/v1\/media\/\d+\/info\//, (r) => r.fulfill({ contentType: 'application/json',
@@ -372,20 +376,46 @@ test('Stop in the card keeps the files saved so far and drops the rest', async (
   await page.goto('https://www.instagram.com/?page=album');
   await page.locator('[data-keepkeep="action-group"] button').nth(2).click();
   const card = page.locator('#keepkeep-downloads');
+  const header = card.locator('.bubble.header');
   await expect(card.locator('.bubble.item.done')).toHaveCount(2, { timeout: 10000 });
   await expect.poll(() => requested['B3.jpg']).toBe(1);
+  await expect(header.locator('.stop')).toHaveAttribute('aria-label', 'Stop downloading');
   await page.waitForTimeout(300);
-  await page.screenshot({ path: test.info().outputPath('stopping.png') });
-  await card.locator('.bubble.header .stop').click();
-  const header = card.locator('.bubble.header');
+  await header.screenshot({ path: test.info().outputPath('downloading.png') });
+  await header.locator('.stop').click();
   await expect(header.locator('.name')).toHaveText('Download stopped', { timeout: 10000 });
   await expect(header.locator('.sub')).toHaveText('2 of 5 files saved');
-  await expect(card.locator('.bubble.item.stopped')).toHaveCount(3);
   await expect(header.locator('.stop')).toBeHidden();
+  // Only the saved files stay in the list: no row per stopped file.
+  await expect(card.locator('.bubble.item')).toHaveCount(2);
+  await expect(card.locator('.bubble.item:not(.done)')).toHaveCount(0);
   await page.waitForTimeout(500);
-  await page.screenshot({ path: test.info().outputPath('stopped.png') });
+  await card.locator('.job').screenshot({ path: test.info().outputPath('stopped.png') });
+  // The card fits what is left: no empty rows under the saved files.
+  const [job, last] = await Promise.all([card.locator('.job').boundingBox(), card.locator('.bubble.item').last().boundingBox()]);
+  expect(job.y + job.height - (last.y + last.height)).toBeLessThan(16);
   expect(await savedFiles(ext)).toHaveLength(2);
   expect(requested['B4.jpg']).toBeUndefined();
   expect(requested['B5.jpg']).toBeUndefined();
 });
 
+test('Stop while Instagram is still asked: nothing is saved and the card ends', async ({ context, extensionId }) => {
+  let answer;
+  await context.route(/\/api\/v1\/media\/\d+\/info\//, (r) => { answer = () => r.fulfill({ contentType: 'application/json',
+    body: JSON.stringify({ items: [{ taken_at: 1719323002, user: { username: 'alice' }, ...photo }] }) }); });
+  const { ext, requested } = await openCdn(context, extensionId);
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.goto('https://www.instagram.com/?page=video-post');
+  await page.locator('[data-keepkeep="action-group"] button').nth(2).click();
+  const header = page.locator('#keepkeep-downloads .bubble.header');
+  await expect(header.locator('.name')).toHaveText('Preparing download…');
+  await header.locator('.stop').click();
+  await expect(header.locator('.name')).toHaveText('Stopping…');
+  await expect.poll(() => !!answer).toBe(true);
+  answer();
+  await expect(header.locator('.name')).toHaveText('Download stopped', { timeout: 10000 });
+  await expect(header.locator('.sub')).toHaveText('Nothing was saved');
+  expect(Object.keys(requested).filter((n) => n.endsWith('.jpg') && n !== 'c.jpg')).toEqual([]);
+  expect(await ext.evaluate(async () => (await chrome.downloads.search({})).length)).toBe(0);
+});

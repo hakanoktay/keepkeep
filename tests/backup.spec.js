@@ -156,7 +156,7 @@ test('a tampered backup: only valid records and fields get in, nothing loads fro
     settings: { photoSize: 'huge', videoQuality: 'original', anonStories: 'yes' },
   });
   expect(result).toMatchObject({ profiles: 1, media: 2, lists: 1, skipped: 5 });
-  expect(result.settings).toEqual([{ key: 'videoQuality', theirs: 'original', ours: 'best' }]);
+  expect(result.settings).toEqual([{ key: 'videoQuality', theirs: 'original', ours: 'standard' }]);
   const all = await stored(page);
   expect(all.lists).toEqual([{ id: 'ok', name: 'A'.repeat(40), kind: 'm' }]);
   const good = all['m:GOOD'];

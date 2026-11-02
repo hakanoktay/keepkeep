@@ -34,7 +34,7 @@ for (const [where, open, scope] of [['popup', openPopup, '.settings-body'], ['ap
       await expect(label.locator('b')).toHaveText(title);
       await expect(label.locator('.desc')).toHaveText(desc);
     }
-    await expect(page.locator('input[name=video-quality][value=best]')).toBeChecked();
+    await expect(page.locator('input[name=video-quality][value=standard]')).toBeChecked(); // the default
   });
 
   test(`${where}: choosing Original stores it`, async ({ context, extensionId }) => {
