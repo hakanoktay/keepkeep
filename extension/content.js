@@ -168,16 +168,28 @@ var KeepKeepDrop = (() => {
     if (msg?.type === 'download-keys') {
       const keys = (msg.keys || []).filter((k) => typeof k === 'string' && k.startsWith('m:')).map((k) => k.slice(2));
       sendResponse({ ok: true, started: keys.length });
-      queue = queue.then(() => downloadKeys(keys, msg.force === true));
+      const round = stopRound;
+      queue = queue.then(() => downloadKeys(keys, msg.force === true, round));
     }
   });
+
+  // Stop in the download card: the running downloads end with what is saved
+  // so far, and posts still waiting in the queue are dropped.
+  const stopped = new Set(); // jobs
+  let stopRound = 0;
+  KeepKeepPanel.downloads.onStop = (jobs) => {
+    stopRound++;
+    for (const job of jobs) stopped.add(job);
+    chrome.runtime.sendMessage({ type: 'stop-download', jobs }).catch(() => {});
+  };
 
   // Requests run strictly one after another, with a pause between posts.
   let queue = Promise.resolve();
   const POST_GAP = 800;
-  async function downloadKeys(keys, force = false) {
+  async function downloadKeys(keys, force = false, round = stopRound) {
     for (let i = 0; i < keys.length; i++) {
       if (i) await new Promise((r) => setTimeout(r, POST_GAP));
+      if (stopRound !== round) return; // stopped in the card: the posts still waiting aren't started
       const key = keys[i];
       try {
         if (!key.startsWith('story:')) await download(key, undefined, force);
@@ -305,6 +317,7 @@ var KeepKeepDrop = (() => {
   // those, with `force`.
   async function save(job, username, files, videoQuality, force = false) {
     const ui = KeepKeepPanel.downloads;
+    if (stopped.has(job)) return ui.finish(job, { stopped: true }); // stopped while Instagram was asked
     ui.items(job, { username, files });
     // The posts / stories the files belong to (`g`), with their files' places.
     const groups = [...new Set(files.map((f) => f.g).filter(Boolean))]
@@ -315,7 +328,8 @@ var KeepKeepDrop = (() => {
     });
     if (!res?.ok) throw new Error(res?.error || 'failed');
     const skipped = (res.skipped || []).map((i) => files[i]).filter(Boolean);
-    ui.finish(job, { ...res, again: skipped.length ? () => downloadAgain(username, skipped, videoQuality) : null });
+    ui.finish(job, { ...res, stopped: res.stopped || stopped.has(job), again: skipped.length ? () => downloadAgain(username, skipped, videoQuality) : null });
+    stopped.delete(job);
   }
 
   function downloadAgain(username, files, videoQuality) {

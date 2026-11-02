@@ -15,6 +15,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     startDownload(msg, sender.tab?.id).then(sendResponse, (err) => sendResponse({ error: String(err?.message || err) }));
     return true;
   }
+  if (msg?.type === 'stop-download' && Array.isArray(msg.jobs)) {
+    // Stop in the card: the helper page stops building these jobs.
+    for (const job of msg.jobs.filter((j) => typeof j === 'string')) {
+      stopping.add(job);
+      chrome.runtime.sendMessage({ target: 'offscreen', type: 'stop', job }).catch(() => {});
+    }
+    return;
+  }
   if (msg?.type === 'dl-progress') {
     // From the helper page; pass it on to the Instagram tab that asked.
     const tabId = jobs.get(msg.job);
@@ -29,6 +37,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // and video as its own file.
 
 const jobs = new Map(); // job id → tab id, for progress messages
+const stopping = new Set(); // jobs the user stopped
 
 // `groups`: the posts / stories the files belong to ({ key, url, username,
 // type, thumb, files: [index] }), recorded for the app's Downloads view.
@@ -64,6 +73,7 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
     });
   }
   if (!files.length) return { ok: true, filenames: [], skipped };
+  if (stopping.delete(job)) return { ok: true, filenames: [], skipped, stopped: true };
   jobs.set(job, tabId);
   try {
     await ensureHelper();
@@ -81,9 +91,10 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
       releaseWhenDone(id, url, () => file?.id && KeepKeepDownloads.putFile({ id: file.id, top: !!top, at: Date.now(), dl: id, name: filename }).catch(() => {}));
     }
     recordPosts(groups, built.outputs.map((o) => o.index)).catch(() => {});
-    return { ok: true, filenames: built.outputs.map((o) => o.filename), skipped };
+    return { ok: true, filenames: built.outputs.map((o) => o.filename), skipped, ...(built.stopped && { stopped: true }) };
   } finally {
     jobs.delete(job);
+    stopping.delete(job);
   }
 }
 

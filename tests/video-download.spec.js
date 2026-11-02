@@ -86,7 +86,7 @@ async function download(context, extensionId, { item, quality, broken = {}, serv
 // An extension page, and the offscreen page with the fake CDN behind it.
 // `requested`: file name → how many times the offscreen page asked for it;
 // `urls`: every address it asked for.
-async function openCdn(context, extensionId, { broken = {}, served = {} } = {}) {
+async function openCdn(context, extensionId, { broken = {}, served = {}, held = {} } = {}) {
   const ext = await context.newPage();
   await ext.goto(`chrome-extension://${extensionId}/app.html#about`);
   const requested = {};
@@ -96,6 +96,7 @@ async function openCdn(context, extensionId, { broken = {}, served = {} } = {}) 
     urls.push(url);
     requested[name] = (requested[name] || 0) + 1;
     if (!url.startsWith(V)) return { status: 404 };
+    if (held[name]) return held[name];
     if (broken[name] === 404) return { status: 404 };
     if (broken[name]) return { body: broken[name] };
     if (name.endsWith('.jpg')) return { type: 'image/jpeg', body: JPEG };
@@ -119,7 +120,7 @@ async function fakeCdn(context, ext, answer) {
     waiting.set(++lastId, resolve);
     cdp.send('Target.sendMessageToTarget', { sessionId, message: JSON.stringify({ id: lastId, method, params }) });
   });
-  cdp.on('Target.receivedMessageFromTarget', (e) => {
+  cdp.on('Target.receivedMessageFromTarget', async (e) => {
     if (e.sessionId !== sessionId) return;
     const m = JSON.parse(e.message);
     if (waiting.has(m.id)) {
@@ -127,7 +128,8 @@ async function fakeCdn(context, ext, answer) {
       waiting.delete(m.id);
     }
     if (m.method !== 'Fetch.requestPaused') return;
-    const { status = 200, type = status === 200 ? 'video/mp4' : 'text/html', body = Buffer.alloc(0) } = answer(m.params.request.url);
+    // `answer` may return a promise: a file that is slow to come (or never comes).
+    const { status = 200, type = status === 200 ? 'video/mp4' : 'text/html', body = Buffer.alloc(0) } = await answer(m.params.request.url);
     call('Fetch.fulfillRequest', { requestId: m.params.requestId, responseCode: status, body: body.toString('base64'),
       responseHeaders: [{ name: 'content-type', value: type }, { name: 'content-length', value: String(body.length) }] });
   });
@@ -355,3 +357,35 @@ test('with "Skip files downloaded before" off, the same photo is downloaded agai
   await downloadAgain(context, 'Saved to Downloads/KeepKeep');
   await expect.poll(() => filesOnDisk(ext)).toBe(2);
 });
+
+// Stop in the card: the files saved so far stay, the file on the way and the
+// ones not started are dropped (never fetched), and the card says so.
+test('Stop in the card keeps the files saved so far and drops the rest', async ({ context, extensionId }) => {
+  const pic = (n) => ({ media_type: 1, image_versions2: { candidates: [{ url: `${V}t51/B${n}.jpg?stp=dst-jpg_e35_p1080x1080`, width: 1080, height: 1080 }] } });
+  await context.route(/\/api\/v1\/media\/\d+\/info\//, (r) => r.fulfill({ contentType: 'application/json',
+    body: JSON.stringify({ items: [{ taken_at: 1719323002, user: { username: 'alice' }, media_type: 8, ...pic(1), carousel_media: [1, 2, 3, 4, 5].map(pic) }] }) }));
+  const never = new Promise(() => {}); // B3 never comes
+  const { ext, requested } = await openCdn(context, extensionId, { held: { 'B3.jpg': never } });
+  await ext.evaluate(() => chrome.storage.local.set({ photoSize: 'standard' }));
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.goto('https://www.instagram.com/?page=album');
+  await page.locator('[data-keepkeep="action-group"] button').nth(2).click();
+  const card = page.locator('#keepkeep-downloads');
+  await expect(card.locator('.bubble.item.done')).toHaveCount(2, { timeout: 10000 });
+  await expect.poll(() => requested['B3.jpg']).toBe(1);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: test.info().outputPath('stopping.png') });
+  await card.locator('.bubble.header .stop').click();
+  const header = card.locator('.bubble.header');
+  await expect(header.locator('.name')).toHaveText('Download stopped', { timeout: 10000 });
+  await expect(header.locator('.sub')).toHaveText('2 of 5 files saved');
+  await expect(card.locator('.bubble.item.stopped')).toHaveCount(3);
+  await expect(header.locator('.stop')).toBeHidden();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: test.info().outputPath('stopped.png') });
+  expect(await savedFiles(ext)).toHaveLength(2);
+  expect(requested['B4.jpg']).toBeUndefined();
+  expect(requested['B5.jpg']).toBeUndefined();
+});
+

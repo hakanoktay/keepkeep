@@ -615,13 +615,21 @@ var KeepKeepPanel = (() => {
     .again:hover { filter: brightness(1.1); }
     svg { display: block; width: 100%; height: 100%; }
     /* The minimise button */
-    .min {
+    .min, .stop {
       flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 7px; padding: 0;
       background: var(--secondary); color: var(--muted); cursor: pointer; transition: color 0.15s, filter 0.15s;
     }
-    .min:hover { color: var(--text); filter: brightness(0.95); }
+    .min:hover, .stop:hover { color: var(--text); filter: brightness(0.95); }
     .min svg { width: 14px; height: 14px; transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .job.collapsed .min svg { transform: rotate(180deg); }
+    /* Stop: on while anything is downloading; files saved so far stay */
+    .stop { margin-right: 6px; }
+    .stop:hover { color: var(--red); filter: none; }
+    .stop svg { width: 13px; height: 13px; }
+    .stop.gone { display: none; }
+    .stopped .done-mark { background: var(--muted); color: #fff; padding: 5px; }
+    .stopped .bar { background: var(--secondary); }
+    .item.stopped .name { color: var(--muted); }
     /* The list: its height eases to the content; rows glide (see layout()). */
     .listbox { position: relative; overflow: hidden; border-top: 1px solid var(--secondary); transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s, border-color 0.25s; clip-path: inset(0 round 0 0 14px 14px); }
     .job.collapsed .listbox { opacity: 0; border-top-color: transparent; }
@@ -671,6 +679,7 @@ var KeepKeepPanel = (() => {
     video: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>',
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 9 9"/></svg>',
     chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
   };
   let dlHost, dlStack;
   const dlJobs = new Map(); // job → { username, items: [file], finished, failed }
@@ -723,7 +732,18 @@ var KeepKeepPanel = (() => {
     const min = el('button', 'min', DL_ICONS.chevron);
     min.title = 'Hide the files (the download goes on)';
     min.addEventListener('click', (e) => { e.stopPropagation(); if (board === b) collapse(!b.collapsed); });
-    header.querySelector('.state').before(min);
+    const stop = el('button', 'stop', DL_ICONS.stop);
+    stop.title = 'Stop (files saved so far stay)';
+    stop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const jobs = [...dlJobs].filter(([, j]) => !j.finished && !j.failed).map(([job]) => job);
+      if (!jobs.length || board !== b) return;
+      stop.classList.add('gone');
+      b.stopping = true;
+      setText(header, 'Stopping…', null);
+      downloads.onStop?.(jobs);
+    });
+    header.querySelector('.state').before(stop, min);
     const box = el('div', 'listbox');
     const list = el('div', 'items');
     const savedRow = el('div', 'row sumrow saved gone', `<span class="check">${ICONS.check}</span><span class="label"></span><span class="stackthumbs"></span>`);
@@ -767,7 +787,8 @@ var KeepKeepPanel = (() => {
     if (b.collapsed) setText(b.header, null, `${done} of ${files.length} saved · ${Math.round(b.peak * 100)}%`);
     else if (posts > 1) setText(b.header, null, plural(files.length, 'file'));
     else setText(b.header, null, files[0].job.username ? '@' + files[0].job.username : '');
-    if (posts > 1) setText(b.header, `Downloading ${plural(posts, 'post')}`);
+    if (b.stopping) setText(b.header, 'Stopping…');
+    else if (posts > 1) setText(b.header, `Downloading ${plural(posts, 'post')}`);
     else if (files.length === 1) setText(b.header, `Downloading ${files[0].kind === 'video' ? 'video' : 'photo'}`);
     else setText(b.header, `Downloading ${files.length} files`);
   }
@@ -807,7 +828,9 @@ var KeepKeepPanel = (() => {
     if (!b) return;
     const files = b.files.filter((f) => !f.job.failed);
     const open = files.findIndex((f) => !f.done);
-    const cur = files[open < 0 ? files.length - 1 : open];
+    const halt = files.findIndex((f) => f.stopped); // after Stop: the first file not saved
+    const at = open >= 0 ? open : halt >= 0 ? halt : files.length - 1;
+    const cur = files[at];
     // The fixed place: the current file; the list: all the others, in order.
     const was = b.now.firstElementChild;
     if (cur && was !== cur.el) {
@@ -820,7 +843,7 @@ var KeepKeepPanel = (() => {
     }
     const rest = files.filter((f) => f !== cur);
     const slots = Math.min(rest.length, SLOTS - 1);
-    const next = open < 0 ? rest.length : open; // the first file after the current one, in the list
+    const next = open >= 0 ? open : halt >= 0 ? halt : rest.length; // the first file after the current one, in the list
     const start = Math.max(0, Math.min(next, rest.length - slots));
     rest.forEach((f, i) => {
       f.el.classList.toggle('away', i < start || i >= start + slots);
@@ -837,7 +860,7 @@ var KeepKeepPanel = (() => {
     const many = files.length > SLOTS;
     b.savedRow.classList.toggle('gone', !many);
     b.moreRow.classList.toggle('gone', !many);
-    const saved = files.filter((f) => f.done).length;
+    const saved = files.filter((f) => f.done && !f.stopped).length;
     if (saved !== b.saved) {
       b.savedRow.classList.toggle('zero', !saved);
       if (saved > b.saved && b.saved >= 0) {
@@ -845,7 +868,7 @@ var KeepKeepPanel = (() => {
         check.classList.remove('pop'); void check.offsetWidth; check.classList.add('pop');
       }
       b.saved = saved;
-      const pics = files.filter((f) => f.done).slice(-4).map((f) => (f.thumb
+      const pics = files.filter((f) => f.done && !f.stopped).slice(-4).map((f) => (f.thumb
         ? Object.assign(document.createElement('img'), { src: f.thumb, alt: '', onerror() { this.replaceWith(el('span', 'ph')); } })
         : el('span', 'ph')));
       b.savedRow.querySelector('.stackthumbs').replaceChildren(...pics);
@@ -869,7 +892,15 @@ var KeepKeepPanel = (() => {
     const again = [...new Set(files.map((f) => f.job.again).filter(Boolean))];
     clearTimeout(b.endTimer);
     b.header.querySelector('.again')?.remove();
-    if (files.length) {
+    b.header.querySelector('.stop').classList.add('gone');
+    const stoppedJobs = [...new Set(b.files.map((f) => f.job))].some((j) => j.stopped) || [...dlJobs.values()].some((j) => j.stopped && !j.items.length);
+    b.header.classList.toggle('stopped', stoppedJobs);
+    if (stoppedJobs) {
+      const saved = files.filter((f) => f.done && !f.stopped && !f.skipped).length;
+      setText(b.header, 'Download stopped', saved ? `${saved} of ${plural(files.length, 'file')} saved` : 'Nothing was saved');
+      markDone(b.header);
+      b.header.querySelector('.done-mark').innerHTML = DL_ICONS.stop;
+    } else if (files.length) {
       if (skipped === files.length) {
         setText(b.header, 'Already downloaded', files.length === 1 ? files[0].filename : `${plural(files.length, 'file')}, downloaded before`);
       } else {
@@ -916,8 +947,10 @@ var KeepKeepPanel = (() => {
       b.ending = false;
       clearTimeout(b.endTimer);
       b.header.querySelector('.again')?.remove();
+      b.header.querySelector('.stop').classList.remove('gone');
+      b.stopping = false;
       if (b.header.classList.contains('done') || b.header.classList.contains('bad')) {
-        b.header.classList.remove('done', 'bad', 'skipped');
+        b.header.classList.remove('done', 'bad', 'skipped', 'stopped');
         b.header.querySelector('.state').innerHTML = '<div class="spin"></div>';
         if (!b.files.length) setText(b.header, 'Preparing download…', 'Finding the best quality');
       }
@@ -983,7 +1016,18 @@ var KeepKeepPanel = (() => {
       if (!j || !board) return;
       j.finished = true;
       j.again = res?.again || null;
-      for (const it of j.items) if (!it.done) { it.done = true; markDone(it.el); }
+      j.stopped = !!res?.stopped;
+      for (const it of j.items) {
+        if (it.done) continue;
+        it.done = true;
+        if (j.stopped) {
+          it.stopped = true;
+          it.el.classList.add('stopped');
+          setText(it.el, null, 'Stopped');
+          it.el.querySelector('.bar').style.width = '0';
+          it.el.querySelector('.state').innerHTML = `<div class="done-mark">${DL_ICONS.stop}</div>`;
+        } else markDone(it.el);
+      }
       overall();
       layout();
       maybeEnd();
@@ -1027,7 +1071,7 @@ var KeepKeepPanel = (() => {
       const r = card?.getBoundingClientRect();
       const over = r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
       // The card's own buttons (minimise, Download again) always stay clickable.
-      const onMin = [...(card?.querySelectorAll('.min, .again') || [])].some((n) => {
+      const onMin = [...(card?.querySelectorAll('.min, .stop, .again') || [])].some((n) => {
         const r = n.getBoundingClientRect();
         return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
       });

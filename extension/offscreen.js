@@ -38,12 +38,28 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'revoke') URL.revokeObjectURL(msg.url);
+  if (msg.type === 'stop') {
+    const c = stops.get(msg.job);
+    if (c) c.abort(new Error('stopped'));
+    else early.add(msg.job); // asked to stop before the build started
+  }
 });
+
+// The user can stop a download in the card: the file being fetched or joined
+// is dropped, the rest isn't started, and the files built so far are still
+// handed over (the card already shows them as saved).
+const stops = new Map(); // job → AbortController, while it is built
+const early = new Set();
 
 async function build({ job, mode, files }) {
   const outputs = [];
+  const stop = new AbortController();
+  stops.set(job, stop);
+  if (early.delete(job)) stop.abort(new Error('stopped'));
+  const { signal } = stop;
   try {
     for (let i = 0; i < files.length; i++) {
+      if (signal.aborted) break;
       const file = files[i];
       const index = file.index ?? i; // the file's place in the whole download (some may have been skipped)
       const send = (progress) => {
@@ -60,7 +76,8 @@ async function build({ job, mode, files }) {
       // A video up to 1080p from its DASH files; on any problem with them, the
       // single file below, without a word (a download never fails because of this).
       if (file.dash && mode !== 'standard' && !dashTooBig(file.dash, mode)) {
-        bytes = await joinDashFiles(file.dash, mode, send).catch((e) => {
+        bytes = await joinDashFiles(file.dash, mode, send, signal).catch((e) => {
+          if (signal.aborted) throw e;
           console.debug('[KeepKeep] DASH fallback:', e);
           fallbackHeight = file.dash.fallbackHeight || null;
           return null;
@@ -68,10 +85,10 @@ async function build({ job, mode, files }) {
         joined = !!bytes;
       }
       // The original-size address first; if the CDN refuses it, the listed size.
-      bytes ||= await fetchWithProgress(file.url, report).catch((e) => {
-        if (!file.fallback) throw e;
+      bytes ||= await fetchWithProgress(file.url, report, { signal }).catch((e) => {
+        if (signal.aborted || !file.fallback) throw e;
         usedFallback = true;
-        return fetchWithProgress(file.fallback, report);
+        return fetchWithProgress(file.fallback, report, { signal });
       });
       // Into a blob at once, so only one file's bytes are held at a time.
       // `top`: the best quality there was (a photo's original size; a video
@@ -80,24 +97,28 @@ async function build({ job, mode, files }) {
       outputs.push({ url: URL.createObjectURL(new Blob([bytes], { type: bytes.mediaType })), filename: file.filename, index, top, seal: seal(job, index) });
     }
   } catch (e) {
-    for (const { url } of outputs) URL.revokeObjectURL(url); // nothing will download them now
-    throw e;
+    if (!signal.aborted) {
+      for (const { url } of outputs) URL.revokeObjectURL(url); // nothing will download them now
+      throw e;
+    }
+  } finally {
+    stops.delete(job);
   }
-  return { outputs };
+  return { outputs, ...(signal.aborted && { stopped: true }) };
 }
 
 // Instagram keeps a video's larger sizes (up to 1080p) as separate video and
 // audio files (DASH). Fetches both – the balloon counts their bytes together –
 // and puts them into one MP4 with video-join.js: the video converted to H.264
 // ('best') or both as they are ('original'). Throws on any problem.
-async function joinDashFiles({ video, audio, duration }, mode, send) {
+async function joinDashFiles({ video, audio, duration }, mode, send, signal) {
   const { joinDash } = await import('./video-join.js');
   // Until the audio's real size is known, a guess from its bitrate, so the bar doesn't step back.
   const audioGuess = audio ? Math.round(((audio.bandwidth || 0) * (duration || 0)) / 8) : 0;
   // The files' own "done" isn't passed on: the video is done once it's joined.
-  const videoBytes = await fetchWithProgress(video.url, (loaded, total) => send({ loaded, total: total && total + audioGuess, done: false }));
+  const videoBytes = await fetchWithProgress(video.url, (loaded, total) => send({ loaded, total: total && total + audioGuess, done: false }), { signal });
   const audioBytes = audio
-    ? await fetchWithProgress(audio.url, (loaded, total) => send({ loaded: videoBytes.length + loaded, total: total && videoBytes.length + total, done: false }), { audio: true })
+    ? await fetchWithProgress(audio.url, (loaded, total) => send({ loaded: videoBytes.length + loaded, total: total && videoBytes.length + total, done: false }), { audio: true, signal })
     : null;
   const fetched = videoBytes.length + (audioBytes?.length || 0);
   // The phase follows the mode actually used ('best' can quietly become 'original').
@@ -116,7 +137,7 @@ async function joinDashFiles({ video, audio, duration }, mode, send) {
   let joined;
   try {
     joined = await joinDash({
-      video: videoBytes, audio: audioBytes, mode, duration, signal: watchdog.signal,
+      video: videoBytes, audio: audioBytes, mode, duration, signal: signal ? AbortSignal.any([watchdog.signal, signal]) : watchdog.signal,
       onMode: (used) => {
         phase = used === 'best' ? 'convert' : 'join';
         step(0);
@@ -139,8 +160,8 @@ async function joinDashFiles({ video, audio, duration }, mode, send) {
 
 // Fetches a file, reporting progress, and returns its bytes.
 // `audio`: the file is a video's DASH audio, which may come as audio/*.
-async function fetchWithProgress(url, onProgress, { audio = false } = {}) {
-  const res = await fetch(url);
+async function fetchWithProgress(url, onProgress, { audio = false, signal } = {}) {
+  const res = await fetch(url, { signal });
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   // An error page or message instead of the file (e.g. an expired link) must
   // never be saved under a photo / video name.
