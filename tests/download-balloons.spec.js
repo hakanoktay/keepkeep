@@ -41,7 +41,8 @@ test('many files: the one downloading and the next two show, the rest wait in "+
   await page.waitForTimeout(400);
   expect(await visibleNames(root)).toEqual(['a_1.jpg', 'a_2.jpg', 'a_3.jpg']);
   await expect(root('.sumrow.more')).toHaveText('+9 more');
-  await expect(root('.sumrow.saved')).toHaveText('0 of 12 saved');
+  await expect(root('.panel .count')).toHaveText('0 of 12 saved · 0%');
+  await expect(root('.sumrow.saved')).toBeHidden(); // the panel says it
   expect(await root('.items').evaluate((l) => l.scrollHeight <= l.clientHeight)).toBe(true);
 });
 
@@ -50,7 +51,7 @@ test('finished files slide up into "✓ n of N saved"; the card keeps its size',
   await page.waitForTimeout(500);
   const h0 = (await root('.job').boundingBox()).height;
   await page.evaluate(() => { for (let i = 0; i < 3; i++) KeepKeepPanel.downloads.progress('j', i, 100, 100, true); });
-  await expect(root('.sumrow.saved')).toHaveText('3 of 12 saved');
+  await expect(root('.panel .count')).toHaveText(/^3 of 12 saved · \d+%$/);
   expect(await visibleNames(root)).toEqual(['a_4.jpg', 'a_5.jpg', 'a_6.jpg']);
   await expect(root('.sumrow.more')).toHaveText('+6 more');
   await page.waitForTimeout(600);
@@ -62,7 +63,8 @@ test('finished files slide up into "✓ n of N saved"; the card keeps its size',
 test('at the end: "✓ n of N saved", the last files in the window, nothing more', async ({ context, extensionId }) => {
   const { page, root } = await balloons(context, extensionId, 6);
   await page.evaluate(() => KeepKeepPanel.downloads.finish('j', { filenames: Array.from({ length: 6 }, (_, i) => `a_${i + 1}.jpg`) }));
-  await expect(root('.sumrow.saved')).toHaveText('6 of 6 saved');
+  await expect(root('.header .name')).toHaveText('Saved to Downloads/KeepKeep');
+  await expect(root('.panel')).toBeHidden();
   expect(await visibleNames(root)).toEqual(['a_6.jpg', 'a_4.jpg', 'a_5.jpg']); // the last one in the fixed place
   await expect(root('.sumrow.more')).toHaveText('');
 });
@@ -150,9 +152,9 @@ test('minimise: the files fold away, the header says how far the download is; ag
   await page.evaluate(() => { for (let i = 0; i < 3; i++) KeepKeepPanel.downloads.progress('j', i, 100, 100, true); });
   await root('.header .min').click();
   await expect(root('.job')).toHaveClass(/collapsed/);
-  await expect(root('.header .sub')).toHaveText(/^3 of 7 saved · \d+%$/);
+  await expect(root('.panel .count')).toHaveText(/^3 of 7 saved · \d+%$/); // the panel stays while the files are folded
   await page.evaluate(() => KeepKeepPanel.downloads.progress('j', 3, 100, 100, true));
-  await expect(root('.header .sub')).toHaveText(/^4 of 7 saved/);
+  await expect(root('.panel .count')).toHaveText(/^4 of 7 saved/);
   await root('.header .min').click();
   await expect(root('.job')).not.toHaveClass(/collapsed/);
   await expect(root('.header .sub')).toHaveText('@alexijayyy');

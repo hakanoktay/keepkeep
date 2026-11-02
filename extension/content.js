@@ -174,14 +174,28 @@ var KeepKeepDrop = (() => {
   });
 
   // Stop in the download card: the running downloads end with what is saved
-  // so far, and posts still waiting in the queue are dropped.
+  // so far, and posts still waiting in the queue are dropped. Resume brings
+  // back what wasn't saved: the files of the stopped downloads and the posts
+  // that were still waiting.
   const stopped = new Set(); // jobs
+  const resumers = []; // what Resume starts again
   let stopRound = 0;
   KeepKeepPanel.downloads.onStop = (jobs) => {
     stopRound++;
+    resumers.length = 0;
     for (const job of jobs) stopped.add(job);
     chrome.runtime.sendMessage({ type: 'stop-download', jobs }).catch(() => {});
   };
+  KeepKeepPanel.downloads.canResume = () => resumers.length > 0;
+  KeepKeepPanel.downloads.onResume = () => {
+    stopped.clear();
+    for (const again of resumers.splice(0)) again();
+  };
+  function resumeFiles(username, files, videoQuality) {
+    const job = Math.random().toString(36).slice(2);
+    KeepKeepPanel.downloads.start(job);
+    save(job, username, files, videoQuality).catch(() => KeepKeepPanel.downloads.fail(job, "Couldn't download these files"));
+  }
 
   // Requests run strictly one after another, with a pause between posts.
   let queue = Promise.resolve();
@@ -189,7 +203,12 @@ var KeepKeepDrop = (() => {
   async function downloadKeys(keys, force = false, round = stopRound) {
     for (let i = 0; i < keys.length; i++) {
       if (i) await new Promise((r) => setTimeout(r, POST_GAP));
-      if (stopRound !== round) return; // stopped in the card: the posts still waiting aren't started
+      if (stopRound !== round) { // stopped in the card: the posts still waiting aren't started, until Resume
+        const rest = keys.slice(i);
+        resumers.push(() => { const r = stopRound; queue = queue.then(() => downloadKeys(rest, force, r)); });
+        KeepKeepPanel.downloads.resumable();
+        return;
+      }
       const key = keys[i];
       try {
         if (!key.startsWith('story:')) await download(key, undefined, force);
@@ -317,7 +336,10 @@ var KeepKeepDrop = (() => {
   // those, with `force`.
   async function save(job, username, files, videoQuality, force = false) {
     const ui = KeepKeepPanel.downloads;
-    if (stopped.has(job)) return ui.finish(job, { stopped: true }); // stopped while Instagram was asked
+    if (stopped.has(job)) { // stopped while Instagram was asked
+      resumers.push(() => resumeFiles(username, files, videoQuality));
+      return ui.finish(job, { stopped: true });
+    }
     ui.items(job, { username, files });
     // The posts / stories the files belong to (`g`), with their files' places.
     const groups = [...new Set(files.map((f) => f.g).filter(Boolean))]
@@ -328,7 +350,13 @@ var KeepKeepDrop = (() => {
     });
     if (!res?.ok) throw new Error(res?.error || 'failed');
     const skipped = (res.skipped || []).map((i) => files[i]).filter(Boolean);
-    ui.finish(job, { ...res, stopped: res.stopped || stopped.has(job), again: skipped.length ? () => downloadAgain(username, skipped, videoQuality) : null });
+    const halted = res.stopped || stopped.has(job);
+    if (halted) {
+      const done = new Set([...(res.saved || []), ...(res.skipped || [])]);
+      const rest = files.filter((_, i) => !done.has(i));
+      if (rest.length) resumers.push(() => resumeFiles(username, rest, videoQuality));
+    }
+    ui.finish(job, { ...res, stopped: halted, again: skipped.length ? () => downloadAgain(username, skipped, videoQuality) : null });
     stopped.delete(job);
   }
 

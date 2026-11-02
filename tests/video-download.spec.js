@@ -280,7 +280,7 @@ test('the background keeps DASH files only from Instagram\'s CDN', async ({ cont
     { url: V + 'p.mp4', filename: 'one.mp4', dash: { video: { url: 'https://evil.example/v.mp4' }, audio: null, duration: 2 } },
     { url: V + 'p.mp4', filename: 'two.mp4', dash: { video: { url: V + 'v1080.mp4' }, audio: { url: 'https://evil.example/a.mp4' }, duration: 2 } },
   ] }), V);
-  expect(res).toEqual({ ok: true, filenames: ['one.mp4', 'two.mp4'], skipped: [] });
+  expect(res).toEqual({ ok: true, filenames: ['one.mp4', 'two.mp4'], skipped: [], saved: [0, 1] });
   expect(urls).toEqual([V + 'p.mp4', V + 'p.mp4']); // neither DASH pair was tried
   const files = await savedFiles(ext);
   expect(files).toHaveLength(2);
@@ -362,60 +362,87 @@ test('with "Skip files downloaded before" off, the same photo is downloaded agai
   await expect.poll(() => filesOnDisk(ext)).toBe(2);
 });
 
-// Stop in the card: the files saved so far stay, the file on the way and the
-// ones not started are never fetched and leave the list; the card says so.
-test('Stop in the card keeps the files saved so far and drops the rest', async ({ context, extensionId }) => {
-  const pic = (n) => ({ media_type: 1, image_versions2: { candidates: [{ url: `${V}t51/B${n}.jpg?stp=dst-jpg_e35_p1080x1080`, width: 1080, height: 1080 }] } });
+// Stop in the card (the panel under the header): the files saved so far stay,
+// the file on the way and the ones not started are never fetched and leave
+// the list; one row says so, and Resume across from the name brings them back.
+const pic = (n) => ({ media_type: 1, image_versions2: { candidates: [{ url: `${V}t51/B${n}.jpg?stp=dst-jpg_e35_p1080x1080`, width: 1080, height: 1080 }] } });
+async function album(context, extensionId, held) {
   await context.route(/\/api\/v1\/media\/\d+\/info\//, (r) => r.fulfill({ contentType: 'application/json',
     body: JSON.stringify({ items: [{ taken_at: 1719323002, user: { username: 'alice' }, media_type: 8, ...pic(1), carousel_media: [1, 2, 3, 4, 5].map(pic) }] }) }));
-  const never = new Promise(() => {}); // B3 never comes
-  const { ext, requested } = await openCdn(context, extensionId, { held: { 'B3.jpg': never } });
-  await ext.evaluate(() => chrome.storage.local.set({ photoSize: 'standard' }));
+  const cdn = await openCdn(context, extensionId, { held });
+  await cdn.ext.evaluate(() => chrome.storage.local.set({ photoSize: 'standard' }));
   const page = await context.newPage();
   await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('https://www.instagram.com/?page=album');
   await page.locator('[data-keepkeep="action-group"] button').nth(2).click();
   const card = page.locator('#keepkeep-downloads');
-  const header = card.locator('.bubble.header');
+  return { ...cdn, page, card, header: card.locator('.bubble.header'), panel: card.locator('.panel') };
+}
+
+test('Stop keeps the files saved so far, drops the rest, and one row says so', async ({ context, extensionId }) => {
+  const { ext, requested, page, card, header, panel } = await album(context, extensionId, { 'B3.jpg': new Promise(() => {}) });
   await expect(card.locator('.bubble.item.done')).toHaveCount(2, { timeout: 10000 });
   await expect.poll(() => requested['B3.jpg']).toBe(1);
-  await expect(header.locator('.stop')).toHaveAttribute('aria-label', 'Stop downloading');
+  await expect(panel.locator('.count')).toHaveText(/^2 of 5 saved · \d+%$/);
+  await expect(header.locator('.state')).toBeHidden(); // the panel shows the progress
   await page.waitForTimeout(300);
-  await header.screenshot({ path: test.info().outputPath('downloading.png') });
-  await header.locator('.stop').click();
-  await expect(header.locator('.name')).toHaveText('Download stopped', { timeout: 10000 });
-  await expect(header.locator('.sub')).toHaveText('2 of 5 files saved');
-  await expect(header.locator('.stop')).toBeHidden();
-  // Only the saved files stay in the list: no row per stopped file.
-  await expect(card.locator('.bubble.item')).toHaveCount(2);
-  await expect(card.locator('.bubble.item:not(.done)')).toHaveCount(0);
+  await card.locator('.job').screenshot({ path: test.info().outputPath('running.png') });
+  await panel.locator('.stop').click();
+  const note = card.locator('.note');
+  await expect(note).toHaveText('Download stopped· 2 of 5 files saved', { timeout: 10000 });
+  await expect(panel).toBeHidden();
+  await expect(header.locator('.name')).toHaveText('@alice');
+  await expect(header.locator('.sub')).toHaveText('5 files');
+  await expect(header.locator('.resume')).toBeVisible();
+  await expect(header.locator('.min')).toBeHidden();
+  await expect(card.locator('.bubble.item')).toHaveCount(2); // only the saved files stay
   await page.waitForTimeout(500);
   await card.locator('.job').screenshot({ path: test.info().outputPath('stopped.png') });
-  // The card fits what is left: no empty rows under the saved files.
   const [job, last] = await Promise.all([card.locator('.job').boundingBox(), card.locator('.bubble.item').last().boundingBox()]);
-  expect(job.y + job.height - (last.y + last.height)).toBeLessThan(16);
+  expect(job.y + job.height - (last.y + last.height)).toBeLessThan(16); // the card fits what is left
   expect(await savedFiles(ext)).toHaveLength(2);
   expect(requested['B4.jpg']).toBeUndefined();
   expect(requested['B5.jpg']).toBeUndefined();
 });
 
-test('Stop while Instagram is still asked: nothing is saved and the card ends', async ({ context, extensionId }) => {
+test('Resume downloads the files that were not saved, in the same card', async ({ context, extensionId }) => {
+  let release;
+  const later = new Promise((r) => { release = () => r({ type: 'image/jpeg', body: JPEG }); });
+  const { ext, requested, page, card, header, panel } = await album(context, extensionId, { 'B3.jpg': later });
+  await expect(card.locator('.bubble.item.done')).toHaveCount(2, { timeout: 10000 });
+  await panel.locator('.stop').click();
+  await expect(header.locator('.resume')).toBeVisible({ timeout: 10000 });
+  release(); // B3 answers now
+  await header.locator('.resume').click();
+  await expect(header.locator('.name')).toHaveText('Saved to Downloads/KeepKeep', { timeout: 15000 });
+  await expect(card.locator('.note')).toBeHidden();
+  await expect(header.locator('.resume')).toBeHidden();
+  await expect(card.locator('.bubble.item.done')).toHaveCount(5);
+  expect(await savedFiles(ext)).toHaveLength(5);
+  expect(requested['B1.jpg']).toBe(1); // the saved ones aren't fetched again
+  expect(requested['B2.jpg']).toBe(1);
+  await page.waitForTimeout(300);
+  await card.locator('.job').screenshot({ path: test.info().outputPath('resumed.png') });
+});
+
+test('Stop while Instagram is still asked: nothing is fetched; Resume starts it again', async ({ context, extensionId }) => {
   let answer;
   await context.route(/\/api\/v1\/media\/\d+\/info\//, (r) => { answer = () => r.fulfill({ contentType: 'application/json',
-    body: JSON.stringify({ items: [{ taken_at: 1719323002, user: { username: 'alice' }, ...photo }] }) }); });
+    body: JSON.stringify({ items: [{ taken_at: 1719323002, user: { username: 'alice' }, media_type: 8, ...pic(1), carousel_media: [1, 2].map(pic) }] }) }); });
   const { ext, requested } = await openCdn(context, extensionId);
   const page = await context.newPage();
   await page.setViewportSize({ width: 1000, height: 800 });
-  await page.goto('https://www.instagram.com/?page=video-post');
+  await page.goto('https://www.instagram.com/?page=album');
   await page.locator('[data-keepkeep="action-group"] button').nth(2).click();
-  const header = page.locator('#keepkeep-downloads .bubble.header');
-  await expect(header.locator('.name')).toHaveText('Preparing download…');
-  await header.locator('.stop').click();
-  await expect(header.locator('.name')).toHaveText('Stopping…');
+  const card = page.locator('#keepkeep-downloads');
+  await expect(card.locator('.bubble.header .name')).toHaveText('Preparing download…');
+  await card.locator('.panel .stop').click(); // Stop is there while Instagram is asked
+  await expect(card.locator('.panel .count')).toHaveText('Stopping…');
   await expect.poll(() => !!answer).toBe(true);
   answer();
-  await expect(header.locator('.name')).toHaveText('Download stopped', { timeout: 10000 });
-  await expect(header.locator('.sub')).toHaveText('Nothing was saved');
-  expect(Object.keys(requested).filter((n) => n.endsWith('.jpg') && n !== 'c.jpg')).toEqual([]);
-  expect(await ext.evaluate(async () => (await chrome.downloads.search({})).length)).toBe(0);
+  await expect(card.locator('.note')).toHaveText('Download stopped· nothing was saved', { timeout: 10000 });
+  expect(Object.keys(requested).filter((n) => /^B\d\.jpg$/.test(n))).toEqual([]);
+  await card.locator('.bubble.header .resume').click();
+  await expect(card.locator('.bubble.header .name')).toHaveText('Saved to Downloads/KeepKeep', { timeout: 10000 });
+  expect(await savedFiles(ext)).toHaveLength(2);
 });

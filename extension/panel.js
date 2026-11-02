@@ -574,11 +574,13 @@ var KeepKeepPanel = (() => {
     * { box-sizing: border-box; }
     .stack {
       --bg: #fff; --text: #000; --muted: #737373; --secondary: #efefef; --brand: #8119b5; --green: #58c322; --red: #ed4956;
+      --panel: #f7f5f9; --panel-track: #e6e0ec; --pill-line: #e3e3e3; --pill-text: #262626;
       --shadow: 0 6px 24px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.08);
       position: fixed; top: 16px; right: 16px; z-index: 2147483646; width: 320px; pointer-events: none;
       font: 400 14px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text);
     }
-    .stack.dark { --bg: #262626; --text: #f5f5f5; --muted: #a8a8a8; --secondary: #363636; --brand: #aa56d5; --shadow: 0 6px 24px rgba(0, 0, 0, 0.55); }
+    .stack.dark { --bg: #262626; --text: #f5f5f5; --muted: #a8a8a8; --secondary: #363636; --brand: #aa56d5; --shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+      --panel: #2f2a34; --panel-track: #453c4d; --pill-line: #4a4a4a; --pill-text: #f5f5f5; }
     .job {
       position: relative; background: var(--bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; pointer-events: auto;
       animation: slide-in 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: opacity 0.2s;
@@ -622,18 +624,34 @@ var KeepKeepPanel = (() => {
     .min:hover { color: var(--text); filter: brightness(0.95); }
     .min svg { width: 14px; height: 14px; transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .job.collapsed .min svg { transform: rotate(180deg); }
-    /* Stop: the media player's ■, never a ✕ (that reads as "close the card");
-       on while anything is downloading. Files saved so far stay; the others
-       leave the list. */
-    .stop {
-      flex: none; width: 24px; height: 24px; margin-right: 6px; display: grid; place-items: center; border: 0; border-radius: 7px; padding: 0;
-      background: var(--secondary); color: var(--muted); cursor: pointer; transition: color 0.15s, filter 0.15s;
+    /* While files download, a soft panel under the header holds the count,
+       the bar and Stop (the header's own spinner and bar step aside). After
+       Stop, one row says so and Resume sits in the header. */
+    .panel {
+      margin: 0 12px 12px; padding: 10px 10px 10px 12px; border-radius: 10px; background: var(--panel);
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 7px; align-items: center;
     }
-    .stop svg { width: 14px; height: 14px; }
-    .stop:hover { color: var(--red); filter: brightness(0.95); }
-    .stop.gone { display: none; }
-    .stopped .done-mark { background: var(--secondary); color: var(--muted); padding: 5px; }
-    .stopped .bar { background: var(--secondary); }
+    .panel .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .panel .count b { color: var(--text); font-weight: 600; }
+    .panel .meter { height: 4px; border-radius: 2px; background: var(--panel-track); overflow: hidden; }
+    .panel .fill { width: 0; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #450b62, #8119b5 50%, #aa56d5); transition: width 0.3s ease; }
+    .panel .pill { grid-row: 1 / span 2; grid-column: 2; }
+    .job.paneled .header .bar, .job.paneled .header .state, .job.halted .header .state, .job.halted .header .min, .job.ended .header .min { display: none; }
+    .pill {
+      flex: none; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 9px; border-radius: 13px; cursor: pointer;
+      font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; white-space: nowrap;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, filter 0.15s;
+    }
+    .pill svg { width: 10px; height: 10px; }
+    .stop { border: 1px solid var(--pill-line); background: var(--bg); color: var(--pill-text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+    .stop:hover { background: #fff1f2; border-color: #f7c5ca; color: var(--red); }
+    .resume { border: 1px solid transparent; background: var(--brand); color: #fff; box-shadow: 0 1px 3px rgba(129, 25, 181, 0.35); }
+    .resume:hover { filter: brightness(1.1); }
+    .note { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-top: 1px solid var(--secondary); font-size: 13px; }
+    .note b { font-weight: 600; white-space: nowrap; }
+    .note .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .note .m { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .panel.gone, .note.gone, .pill.gone { display: none; }
     /* The list: its height eases to the content; rows glide (see layout()). */
     .listbox { position: relative; overflow: hidden; border-top: 1px solid var(--secondary); transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s, border-color 0.25s; clip-path: inset(0 round 0 0 14px 14px); }
     .job.collapsed .listbox { opacity: 0; border-top-color: transparent; }
@@ -683,7 +701,8 @@ var KeepKeepPanel = (() => {
     video: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>',
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 9 9"/></svg>',
     chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
-    stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7.5" y="7.5" width="9" height="9" rx="1.5"/></svg>',
+    stop: '<svg viewBox="0 0 10 10"><rect width="10" height="10" rx="2" fill="currentColor"/></svg>',
+    resume: '<svg viewBox="0 0 10 10"><path d="M2 1.2v7.6a.6.6 0 0 0 .9.5l6.2-3.8a.6.6 0 0 0 0-1L2.9.7a.6.6 0 0 0-.9.5z" fill="currentColor"/></svg>',
   };
   let dlHost, dlStack;
   const dlJobs = new Map(); // job → { username, items: [file], finished, failed }
@@ -736,21 +755,13 @@ var KeepKeepPanel = (() => {
     const min = el('button', 'min', DL_ICONS.chevron);
     min.title = 'Hide the files (the download goes on)';
     min.addEventListener('click', (e) => { e.stopPropagation(); if (board === b) collapse(!b.collapsed); });
-    const stop = el('button', 'stop', DL_ICONS.stop);
+    const panel = el('div', 'panel gone', `<div class="count"></div><button class="pill stop" type="button">${DL_ICONS.stop}Stop</button><div class="meter"><div class="fill"></div></div>`);
+    const stop = panel.querySelector('.stop');
     stop.title = 'Stop downloading (the files saved so far stay)';
-    stop.setAttribute('aria-label', 'Stop downloading');
-    stop.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const jobs = [...dlJobs].filter(([, j]) => !j.finished && !j.failed).map(([job]) => job);
-      if (!jobs.length || board !== b) return;
-      stop.classList.add('gone');
-      b.stopping = true;
-      setText(header, 'Stopping…', null);
-      downloads.onStop?.(jobs);
-      // Whatever doesn't answer soon is ended here, so the card never stays at "Stopping…".
-      setTimeout(() => { for (const job of jobs) if (!dlJobs.get(job)?.finished && !dlJobs.get(job)?.failed) downloads.finish(job, { stopped: true }); }, 4000);
-    });
-    header.querySelector('.state').before(stop, min);
+    const note = el('div', 'note gone');
+    const resume = el('button', 'pill resume gone', `${DL_ICONS.resume}Resume`);
+    resume.title = 'Download the files that were not saved';
+    header.querySelector('.state').before(resume, min);
     const box = el('div', 'listbox');
     const list = el('div', 'items');
     const savedRow = el('div', 'row sumrow saved gone', `<span class="check">${ICONS.check}</span><span class="label"></span><span class="stackthumbs"></span>`);
@@ -760,7 +771,24 @@ var KeepKeepPanel = (() => {
     track.append(reel);
     const moreRow = el('div', 'row sumrow more gone');
     list.append(savedRow, now, track, moreRow);
-    const b = { card, header, box, list, now, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1, browsing: false };
+    const b = { card, header, panel, note, resume, box, list, now, track, reel, savedRow, moreRow, files: [], peak: 0, collapsed: false, saved: -1, browsing: false };
+    stop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const jobs = [...dlJobs].filter(([, j]) => !j.finished && !j.failed).map(([job]) => job);
+      if (!jobs.length || board !== b) return;
+      stop.classList.add('gone');
+      b.stopping = true;
+      headerText();
+      downloads.onStop?.(jobs);
+      // Whatever doesn't answer soon is ended here, so the card never stays at "Stopping…".
+      setTimeout(() => { for (const job of jobs) if (!dlJobs.get(job)?.finished && !dlJobs.get(job)?.failed) downloads.finish(job, { stopped: true }); }, 4000);
+    });
+    resume.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (board !== b || !b.halted) return;
+      clearTimeout(b.endTimer);
+      downloads.onResume?.();
+    });
     // Scrolling by hand stops the list following the download; it comes back
     // to the file downloading 1.5 s after the pointer leaves the card, or at
     // once with "Back to current". The handlers keep to their own card: a
@@ -771,13 +799,13 @@ var KeepKeepPanel = (() => {
     for (const type of ['wheel', 'touchstart', 'pointerdown']) track.addEventListener(type, browse, { passive: true });
     card.addEventListener('pointerleave', () => { if (b.browsing) b.backTimer = setTimeout(back, 1500); });
     card.addEventListener('pointerenter', () => { clearTimeout(b.backTimer); if (b.ending) clearTimeout(b.endTimer); });
-    card.addEventListener('pointerleave', () => { if (b.ending && board === b) leaveLater(b, 2500); });
+    card.addEventListener('pointerleave', () => { if (b.ending && board === b) leaveLater(b, b.halted ? 8000 : 2500); });
     moreRow.addEventListener('click', (e) => { if (b.browsing) { e.stopPropagation(); back(); } });
     // The list's height eases with the window; the card follows once it has settled.
     track.addEventListener('transitionend', (e) => { if (e.propertyName === 'height' && board === b) fitHeight(); });
     box.append(list);
     box.style.height = '0px';
-    card.append(header, box);
+    card.append(header, panel, note, box);
     dlStack.append(card);
     board = b;
     return b;
@@ -792,14 +820,28 @@ var KeepKeepPanel = (() => {
     const files = b.files.filter((f) => !f.job.failed);
     const posts = new Set(files.map((f) => f.job)).size;
     const done = files.filter((f) => f.done).length;
-    if (!files.length) return; // still preparing
-    if (b.collapsed) setText(b.header, null, `${done} of ${files.length} saved · ${Math.round(b.peak * 100)}%`);
-    else if (posts > 1) setText(b.header, null, plural(files.length, 'file'));
+    paintPanel();
+    if (!files.length || b.halted) return; // still preparing, or stopped (maybeEnd wrote it)
+    if (posts > 1) setText(b.header, null, plural(files.length, 'file'));
     else setText(b.header, null, files[0].job.username ? '@' + files[0].job.username : '');
-    if (b.stopping) setText(b.header, 'Stopping…');
-    else if (posts > 1) setText(b.header, `Downloading ${plural(posts, 'post')}`);
+    if (posts > 1) setText(b.header, `Downloading ${plural(posts, 'post')}`);
     else if (files.length === 1) setText(b.header, `Downloading ${files[0].kind === 'video' ? 'video' : 'photo'}`);
     else setText(b.header, `Downloading ${files.length} files`);
+  }
+
+  // The panel: "2 of 5 saved · 44%", the bar and Stop, while anything runs.
+  function paintPanel() {
+    const b = board;
+    const files = b.files.filter((f) => !f.job.failed);
+    const on = active().length > 0 && !b.halted;
+    b.panel.classList.toggle('gone', !on);
+    b.card.classList.toggle('paneled', on);
+    if (!on) return;
+    const done = files.filter((f) => f.done).length;
+    const pct = files.length ? Math.round(b.peak * 100) : 0;
+    b.panel.querySelector('.count').innerHTML = b.stopping ? '<b>Stopping…</b>'
+      : files.length ? `<b>${done} of ${files.length}</b> saved · ${pct}%` : 'Getting the files…';
+    b.panel.querySelector('.fill').style.width = `${pct}%`;
   }
 
   function overall() {
@@ -809,6 +851,7 @@ var KeepKeepPanel = (() => {
     const all = files.reduce((s, f) => s + (f.done ? 1 : f.f || 0), 0) / files.length;
     b.peak = Math.max(b.peak, all); // never steps back
     b.header.querySelector('.bar').style.width = `${Math.round(b.peak * 100)}%`;
+    paintPanel();
   }
 
   function collapse(on) {
@@ -865,7 +908,7 @@ var KeepKeepPanel = (() => {
       b.track.scrollTo({ top: start * ROW_H, behavior: still || !b.card.isConnected ? 'instant' : 'smooth' });
     }
     const many = files.length > SLOTS;
-    b.savedRow.classList.toggle('gone', !many);
+    b.savedRow.classList.add('gone'); // the panel above says how many are saved
     b.moreRow.classList.toggle('gone', !many);
     const saved = files.filter((f) => f.done).length;
     if (saved !== b.saved) {
@@ -899,15 +942,21 @@ var KeepKeepPanel = (() => {
     const again = [...new Set(files.map((f) => f.job.again).filter(Boolean))];
     clearTimeout(b.endTimer);
     b.header.querySelector('.again')?.remove();
-    b.header.querySelector('.stop').classList.add('gone');
     const stoppedJobs = [...dlJobs.values()].filter((j) => j.stopped);
-    b.header.classList.toggle('stopped', stoppedJobs.length > 0);
-    if (stoppedJobs.length) {
+    b.halted = stoppedJobs.length > 0;
+    b.card.classList.toggle('halted', b.halted);
+    b.card.classList.toggle('ended', !b.halted); // done: the title gets the chevron's room
+    paintPanel();
+    if (b.halted) {
+      // The header says whose files these are, one row says what happened,
+      // Resume (across from the name) brings the rest back.
       const saved = files.filter((f) => !f.skipped).length;
-      const total = files.length - files.filter((f) => f.skipped).length + stoppedJobs.reduce((n, j) => n + (j.dropped || 0), 0);
-      setText(b.header, 'Download stopped', saved ? `${saved} of ${plural(total, 'file')} saved` : 'Nothing was saved');
-      markDone(b.header);
-      b.header.querySelector('.done-mark').innerHTML = DL_ICONS.stop;
+      const total = saved + stoppedJobs.reduce((n, j) => n + (j.dropped || 0), 0);
+      const users = [...new Set([...dlJobs.values()].map((j) => j.username).filter(Boolean))];
+      setText(b.header, users.length === 1 ? '@' + users[0] : 'Download stopped', total ? plural(total, 'file') : '');
+      b.note.innerHTML = `<span class="dot"></span><b>Download stopped</b><span class="m">· ${saved ? `${saved} of ${plural(total, 'file')} saved` : 'nothing was saved'}</span>`;
+      b.note.classList.remove('gone');
+      b.resume.classList.toggle('gone', !downloads.canResume?.());
     } else if (files.length) {
       if (skipped === files.length) {
         setText(b.header, 'Already downloaded', files.length === 1 ? files[0].filename : `${plural(files.length, 'file')}, downloaded before`);
@@ -918,7 +967,7 @@ var KeepKeepPanel = (() => {
       markDone(b.header);
       b.header.classList.toggle('skipped', skipped === files.length);
     }
-    if (again.length) {
+    if (again.length && !b.halted) {
       const button = el('button', 'again');
       button.textContent = 'Download again';
       button.title = 'Download the skipped files once more (e.g. if you deleted them)';
@@ -930,7 +979,7 @@ var KeepKeepPanel = (() => {
       b.header.querySelector('.state').before(button);
     }
     b.ending = true;
-    if (!b.card.matches(':hover')) leaveLater(b, again.length ? 9000 : files.length ? 4000 : 3500);
+    if (!b.card.matches(':hover')) leaveLater(b, b.halted ? 12000 : again.length ? 9000 : files.length ? 4000 : 3500);
   }
 
   function leaveLater(b, ms) {
@@ -955,10 +1004,22 @@ var KeepKeepPanel = (() => {
       b.ending = false;
       clearTimeout(b.endTimer);
       b.header.querySelector('.again')?.remove();
-      b.header.querySelector('.stop').classList.remove('gone');
+      b.panel.querySelector('.stop').classList.remove('gone');
+      b.card.classList.remove('ended');
       b.stopping = false;
+      if (b.halted) {
+        // Resume: the same card goes on; the files saved before stay in it.
+        b.halted = false;
+        b.card.classList.remove('halted');
+        b.note.classList.add('gone');
+        b.resume.classList.add('gone');
+        for (const j of dlJobs.values()) j.stopped = false;
+        b.peak = 0;
+        setText(b.header, 'Preparing download…', 'Finding the best quality');
+      }
+      paintPanel();
       if (b.header.classList.contains('done') || b.header.classList.contains('bad')) {
-        b.header.classList.remove('done', 'bad', 'skipped', 'stopped');
+        b.header.classList.remove('done', 'bad', 'skipped');
         b.header.querySelector('.state').innerHTML = '<div class="spin"></div>';
         if (!b.files.length) setText(b.header, 'Preparing download…', 'Finding the best quality');
       }
@@ -1019,6 +1080,12 @@ var KeepKeepPanel = (() => {
       if (board.collapsed) headerText();
     },
 
+    // Something became resumable after the card had ended (posts that were
+    // waiting in the queue): show Resume.
+    resumable() {
+      if (board?.halted) board.resume.classList.toggle('gone', !downloads.canResume?.());
+    },
+
     finish(job, res) {
       const j = dlJobs.get(job);
       if (!j || !board) return;
@@ -1077,7 +1144,7 @@ var KeepKeepPanel = (() => {
       const r = card?.getBoundingClientRect();
       const over = r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
       // The card's own buttons (minimise, Download again) always stay clickable.
-      const onMin = [...(card?.querySelectorAll('.min, .stop, .again') || [])].some((n) => {
+      const onMin = [...(card?.querySelectorAll('.min, .pill, .again') || [])].some((n) => {
         const r = n.getBoundingClientRect();
         return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
       });

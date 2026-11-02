@@ -23,14 +23,20 @@ changing how the card behaves, so a rejected idea doesn't come back.
   under the card doesn't scroll. Following comes back with "Back to current"
   (the "+n more" line turns into it) or 1.5 s after the pointer leaves the
   card.
-- **Stop** (■ in the header, next to the chevron; 2026-11-02, the owner's
-  request: a big album started by mistake shouldn't have to run to the end).
-  Stops every running download in the card and the posts still waiting (the
-  app's queue). Files already saved stay, with their ✓; the file on the way
-  and the rest are never fetched and **leave the list**; the card shrinks to
-  what was saved. Header: "Stopping…", then "Download stopped · 2 of 5 files
-  saved" (or "Nothing was saved"). Whatever hasn't answered 4 s after Stop is
-  ended by the card itself, so it never stays at "Stopping…".
+- **The progress panel, Stop and Resume** (2026-11-02, the owner's design
+  choice "3 · A soft panel" from mock-ups). While anything downloads, a soft
+  lilac panel under the header holds "**2 of 5** saved · 44%", a thin bar and
+  a **■ Stop** button (icon left, word right); the header's own spinner and
+  bar step aside, and the old "✓ n of N saved" row is gone (the panel says
+  it). The panel is there from the start, also while Instagram is still asked.
+  Stop: the files saved so far stay with their ✓; the file on the way and the
+  rest are never fetched and leave the list; the header turns to "@alice ·
+  5 files" with a purple **▶ Resume** across from the name, and one row says
+  "Download stopped · 2 of 5 files saved". Resume downloads only what wasn't
+  saved (also posts that were still waiting in the app's queue), in the same
+  card. A stopped card stays 12 s (8 s after the pointer leaves it). Whatever
+  hasn't answered 4 s after Stop is ended by the card itself. Once a download
+  is done, the chevron goes, so "Saved to Downloads/KeepKeep" fits.
 - **Minimise** (the chevron) is on every download, a single file too; folded,
   the header says "x of y saved · n%".
 - **Click-through only over KeepKeep's own buttons** (`[data-keepkeep]`):
@@ -64,8 +70,12 @@ changing how the card behaves, so a rejected idea doesn't come back.
   (2026-11-02): the ✕ read as "close the card", and a big album filled the
   list with ✕s. Rejected by the owner the same day: Stop is a ■, files not
   saved leave the list.
-- **Stop as the word "Stop"**: clear, but the pill cut the header's title
-  ("Downloading 5…") in the 340 px card.
+- **Stop as the word "Stop" in the header**, and **Stop as a lone ■**:
+  the pill cut the header's title ("Downloading 5…"); the lone ■ stood apart
+  from the chevron and stayed visible after the end. Both replaced by the
+  panel. Mock-ups of the options (bottom bar, own progress bar, Stop on
+  hover, Stop in the saved row; then three ways to join the bar to the
+  header) were made as HTML first, on the owner's request, before any code.
 
 ## Considered, not done (yet)
 

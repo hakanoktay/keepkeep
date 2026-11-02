@@ -73,7 +73,7 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
     });
   }
   if (!files.length) return { ok: true, filenames: [], skipped };
-  if (stopping.delete(job)) return { ok: true, filenames: [], skipped, stopped: true };
+  if (stopping.delete(job)) return { ok: true, filenames: [], skipped, saved: [], stopped: true };
   jobs.set(job, tabId);
   try {
     await ensureHelper();
@@ -91,7 +91,7 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
       releaseWhenDone(id, url, () => file?.id && KeepKeepDownloads.putFile({ id: file.id, top: !!top, at: Date.now(), dl: id, name: filename }).catch(() => {}));
     }
     recordPosts(groups, built.outputs.map((o) => o.index)).catch(() => {});
-    return { ok: true, filenames: built.outputs.map((o) => o.filename), skipped, ...(built.stopped && { stopped: true }) };
+    return { ok: true, filenames: built.outputs.map((o) => o.filename), skipped, saved: built.outputs.map((o) => o.index), ...(built.stopped && { stopped: true }) };
   } finally {
     jobs.delete(job);
     stopping.delete(job);
