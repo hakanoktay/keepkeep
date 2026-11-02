@@ -40,6 +40,19 @@ const KeepKeepDownloads = (() => {
     post: (key) => run('posts', 'readonly', (s) => s.get(key)),
     putPost: (rec) => run('posts', 'readwrite', (s) => s.put(rec)),
     posts: () => run('posts', 'readonly', (s) => s.getAll()),
+    forgetPost: (key) => run('posts', 'readwrite', (s) => s.delete(key)),
+    // The records of files whose Chrome download is one of `ids` (deleted from the folder).
+    forgetFiles: (ids) => run('downloaded', 'readwrite', (s) => {
+      const gone = new Set(ids);
+      const req = s.openCursor();
+      req.onsuccess = () => {
+        const c = req.result;
+        if (!c) return;
+        if (gone.has(c.value.dl)) c.delete();
+        c.continue();
+      };
+      return req;
+    }),
     async forget() {
       await run('downloaded', 'readwrite', (s) => s.clear());
       await run('posts', 'readwrite', (s) => s.clear());

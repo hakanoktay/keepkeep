@@ -46,8 +46,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 // The user can stop a download in the card: the file being fetched or joined
-// is dropped, the rest isn't started, and the files built so far are still
-// handed over (the card already shows them as saved).
+// is dropped, the rest isn't started, and the files built so far are dropped
+// too: nothing of a stopped post reaches the Downloads folder.
 const stops = new Map(); // job → AbortController, while it is built
 const early = new Set();
 
@@ -104,7 +104,11 @@ async function build({ job, mode, files }) {
   } finally {
     stops.delete(job);
   }
-  return { outputs, ...(signal.aborted && { stopped: true }) };
+  if (signal.aborted) {
+    for (const { url } of outputs) URL.revokeObjectURL(url);
+    return { outputs: [], stopped: true };
+  }
+  return { outputs };
 }
 
 // Instagram keeps a video's larger sizes (up to 1080p) as separate video and

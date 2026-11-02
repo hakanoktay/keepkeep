@@ -23,6 +23,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     return;
   }
+  if (msg?.type === 'trash-downloads' && Array.isArray(msg.ids)) {
+    trash(msg.ids.filter(Number.isInteger), Array.isArray(msg.posts) ? msg.posts : []).then(sendResponse, () => sendResponse({ ok: false }));
+    return true;
+  }
   if (msg?.type === 'dl-progress') {
     // From the helper page; pass it on to the Instagram tab that asked.
     const tabId = jobs.get(msg.job);
@@ -38,6 +42,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 const jobs = new Map(); // job id → tab id, for progress messages
 const stopping = new Set(); // jobs the user stopped
+const trashed = new Set(); // Chrome download ids deleted again from the card
+const createdPosts = new Set(); // Downloads-view records this worker made (not ones from earlier downloads)
 
 // `groups`: the posts / stories the files belong to ({ key, url, username,
 // type, thumb, files: [index] }), recorded for the app's Downloads view.
@@ -73,7 +79,7 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
     });
   }
   if (!files.length) return { ok: true, filenames: [], skipped };
-  if (stopping.delete(job)) return { ok: true, filenames: [], skipped, saved: [], stopped: true };
+  if (stopping.delete(job)) return { ok: true, filenames: [], skipped, saved: [], ids: [], stopped: true };
   jobs.set(job, tabId);
   try {
     await ensureHelper();
@@ -83,15 +89,17 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
       for (const { url } of built.outputs) chrome.runtime.sendMessage({ target: 'offscreen', type: 'revoke', url }).catch(() => {});
       throw new Error('a reply for another download');
     }
+    const ids = [];
     for (const { url, filename, index, top } of built.outputs) {
       const id = await chrome.downloads.download({
         url, filename: `KeepKeep/${filename}`, conflictAction: 'uniquify', saveAs: false,
       });
+      ids.push(id);
       const file = files.find((f) => f.index === index);
-      releaseWhenDone(id, url, () => file?.id && KeepKeepDownloads.putFile({ id: file.id, top: !!top, at: Date.now(), dl: id, name: filename }).catch(() => {}));
+      releaseWhenDone(id, url, () => file?.id && !trashed.has(id) && KeepKeepDownloads.putFile({ id: file.id, top: !!top, at: Date.now(), dl: id, name: filename }).catch(() => {}));
     }
     recordPosts(groups, built.outputs.map((o) => o.index)).catch(() => {});
-    return { ok: true, filenames: built.outputs.map((o) => o.filename), skipped, saved: built.outputs.map((o) => o.index), ...(built.stopped && { stopped: true }) };
+    return { ok: true, filenames: built.outputs.map((o) => o.filename), skipped, saved: built.outputs.map((o) => o.index), ids, ...(built.stopped && { stopped: true }) };
   } finally {
     jobs.delete(job);
     stopping.delete(job);
@@ -103,6 +111,26 @@ function seal(job, index) {
   let h = 0x90a3fcc3;
   for (const c of `${job}:${index}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
   return h.toString(36);
+}
+
+// The card's trash button: the files a stopped card had saved are deleted from
+// the folder again, and KeepKeep forgets them (so they can be downloaded
+// later). Only downloads KeepKeep itself made are touched.
+async function trash(ids, posts) {
+  let deleted = 0;
+  for (const id of ids) {
+    const [item] = await chrome.downloads.search({ id }).catch(() => []);
+    if (!item || item.byExtensionId !== chrome.runtime.id) continue;
+    trashed.add(id);
+    if (item.state === 'in_progress') await chrome.downloads.cancel(id).catch(() => {});
+    if (item.state === 'complete' && item.exists !== false) await chrome.downloads.removeFile(id).catch(() => {});
+    await chrome.downloads.erase({ id }).catch(() => {});
+    deleted++;
+  }
+  await KeepKeepDownloads.forgetFiles(ids).catch(() => {});
+  for (const key of posts) if (typeof key === 'string' && createdPosts.delete(key)) await KeepKeepDownloads.forgetPost(key).catch(() => {});
+  chrome.runtime.sendMessage({ type: 'downloads-changed' }).catch(() => {});
+  return { ok: true, deleted };
 }
 
 function safeName(name) {
@@ -128,6 +156,7 @@ async function recordPosts(groups, indexes) {
     const files = (Array.isArray(g.files) ? g.files : []).filter(Number.isInteger);
     if (!files.some((i) => got.has(i))) continue;
     const before = await KeepKeepDownloads.post(g.key).catch(() => null);
+    if (!before) createdPosts.add(g.key);
     const thumb = (g.thumb && await thumbnail(g.thumb, 240).catch(() => null)) || before?.thumb || null;
     await KeepKeepDownloads.putPost({
       key: g.key, url: g.url, username: typeof g.username === 'string' ? g.username : null,

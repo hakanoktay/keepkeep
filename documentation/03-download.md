@@ -36,6 +36,9 @@ Stories and highlights: see [Anonymous story viewing and downloading](04-stories
   progress, and how many are saved. It stays out of the way: fold it, or keep
   clicking KeepKeep's buttons right through it. Start another download while
   one is running and it joins the same card.
+- **Stop** in the card stops the download. The post on the way doesn't reach
+  your folder at all; **Resume** starts it again. If earlier posts had
+  already been saved, a trash button deletes them again in one click.
 - **From the app**, downloads go through an open Instagram tab (KeepKeep
   uses your own signed-in Instagram). If none is open, the app says so and
   offers to open one.

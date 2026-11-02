@@ -187,6 +187,11 @@ var KeepKeepDrop = (() => {
     chrome.runtime.sendMessage({ type: 'stop-download', jobs }).catch(() => {});
   };
   KeepKeepPanel.downloads.canResume = () => resumers.length > 0;
+  // The trash button of a stopped card: deletes the files it had saved.
+  KeepKeepPanel.downloads.onTrash = ({ ids, posts }) => {
+    resumers.length = 0;
+    return chrome.runtime.sendMessage({ type: 'trash-downloads', ids, posts }).catch(() => ({ ok: false }));
+  };
   KeepKeepPanel.downloads.onResume = () => {
     stopped.clear();
     for (const again of resumers.splice(0)) again();
@@ -356,7 +361,7 @@ var KeepKeepDrop = (() => {
       const rest = files.filter((_, i) => !done.has(i));
       if (rest.length) resumers.push(() => resumeFiles(username, rest, videoQuality));
     }
-    ui.finish(job, { ...res, stopped: halted, again: skipped.length ? () => downloadAgain(username, skipped, videoQuality) : null });
+    ui.finish(job, { ...res, stopped: halted, posts: groups.map((g) => g.key), again: skipped.length ? () => downloadAgain(username, skipped, videoQuality) : null });
     stopped.delete(job);
   }
 

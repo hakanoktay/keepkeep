@@ -636,7 +636,7 @@ var KeepKeepPanel = (() => {
     .panel .meter { height: 4px; border-radius: 2px; background: var(--panel-track); overflow: hidden; }
     .panel .fill { width: 0; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #450b62, #8119b5 50%, #aa56d5); transition: width 0.3s ease; }
     .panel .pill { grid-row: 1 / span 2; grid-column: 2; }
-    .job.paneled .header .bar, .job.paneled .header .state, .job.halted .header .state, .job.halted .header .min, .job.ended .header .min { display: none; }
+    .job.paneled .header .bar, .job.paneled .header .state, .job.halted .header .bar, .job.halted .header .state, .job.halted .header .min, .job.ended .header .min { display: none; }
     .pill {
       flex: none; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 9px; border-radius: 13px; cursor: pointer;
       font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; white-space: nowrap;
@@ -651,6 +651,14 @@ var KeepKeepPanel = (() => {
     .note b { font-weight: 600; white-space: nowrap; }
     .note .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
     .note .m { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Only when files were really saved (an earlier post): deletes them again */
+    .trash {
+      flex: none; margin-left: auto; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px;
+      background: none; color: var(--muted); cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .trash svg { width: 17px; height: 17px; }
+    .trash:hover { background: #fff1f2; color: var(--red); }
+    .trash:disabled { opacity: 0.4; cursor: default; }
     .panel.gone, .note.gone, .pill.gone { display: none; }
     /* The list: its height eases to the content; rows glide (see layout()). */
     .listbox { position: relative; overflow: hidden; border-top: 1px solid var(--secondary); transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s, border-color 0.25s; clip-path: inset(0 round 0 0 14px 14px); }
@@ -702,6 +710,7 @@ var KeepKeepPanel = (() => {
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15l5-5 9 9"/></svg>',
     chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
     stop: '<svg viewBox="0 0 10 10"><rect width="10" height="10" rx="2" fill="currentColor"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></svg>',
     resume: '<svg viewBox="0 0 10 10"><path d="M2 1.2v7.6a.6.6 0 0 0 .9.5l6.2-3.8a.6.6 0 0 0 0-1L2.9.7a.6.6 0 0 0-.9.5z" fill="currentColor"/></svg>',
   };
   let dlHost, dlStack;
@@ -955,6 +964,32 @@ var KeepKeepPanel = (() => {
       const users = [...new Set([...dlJobs.values()].map((j) => j.username).filter(Boolean))];
       setText(b.header, users.length === 1 ? '@' + users[0] : 'Download stopped', total ? plural(total, 'file') : '');
       b.note.innerHTML = `<span class="dot"></span><b>Download stopped</b><span class="m">· ${saved ? `${saved} of ${plural(total, 'file')} saved` : 'nothing was saved'}</span>`;
+      // The post that was downloading never reached the folder; files of posts
+      // that had finished did: the trash deletes those again.
+      const done = [...dlJobs.values()].filter((j) => j.finished && !j.stopped && j.ids?.length);
+      if (saved && done.length && downloads.onTrash) {
+        const bin = el('button', 'trash', DL_ICONS.trash);
+        bin.title = `Delete the ${plural(saved, 'saved file')} from Downloads/KeepKeep`;
+        bin.setAttribute('aria-label', bin.title);
+        bin.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          bin.disabled = true;
+          clearTimeout(b.endTimer);
+          const res = await downloads.onTrash({ ids: done.flatMap((j) => j.ids), posts: done.flatMap((j) => j.posts || []) });
+          if (board !== b) return;
+          if (res?.ok) {
+            for (const j of done) { for (const it of j.items) it.el.remove(); j.ids = []; }
+            b.files = b.files.filter((f) => !done.includes(f.job));
+            b.resume.classList.add('gone');
+            b.note.innerHTML = `<span class="dot"></span><b>Download undone</b><span class="m">· ${plural(res.deleted || saved, 'file')} deleted</span>`;
+            layout();
+          } else {
+            b.note.innerHTML = `<span class="dot"></span><b>Couldn't delete the files</b><span class="m">· they are in Downloads/KeepKeep</span>`;
+          }
+          leaveLater(b, 2500);
+        });
+        b.note.append(bin);
+      }
       b.note.classList.remove('gone');
       b.resume.classList.toggle('gone', !downloads.canResume?.());
     } else if (files.length) {
@@ -1092,10 +1127,13 @@ var KeepKeepPanel = (() => {
       j.finished = true;
       j.again = res?.again || null;
       j.stopped = !!res?.stopped;
+      j.ids = res?.ids || [];
+      j.posts = res?.posts || [];
       if (j.stopped) {
-        // The files not saved leave the list; the card keeps what was saved.
-        const gone = j.items.filter((it) => !it.done);
-        j.dropped = gone.length;
+        // A stopped post reaches the folder with nothing: its files leave the list.
+        const kept = new Set(res?.saved || []);
+        const gone = j.items.filter((it, i) => !kept.has(i));
+        j.dropped = gone.filter((it) => !it.skipped).length;
         for (const it of gone) it.el.remove();
         board.files = board.files.filter((f) => !gone.includes(f));
         if (!board.files.length) board.browsing = false;
@@ -1144,7 +1182,7 @@ var KeepKeepPanel = (() => {
       const r = card?.getBoundingClientRect();
       const over = r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
       // The card's own buttons (minimise, Download again) always stay clickable.
-      const onMin = [...(card?.querySelectorAll('.min, .pill, .again') || [])].some((n) => {
+      const onMin = [...(card?.querySelectorAll('.min, .pill, .again, .trash') || [])].some((n) => {
         const r = n.getBoundingClientRect();
         return x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4;
       });
