@@ -278,7 +278,7 @@ function renderProfiles() {
       el('button', {
         class: 'icon-btn remove',
         title: 'Remove profile (their media is kept)',
-        onclick: async () => { if (confirm(`Remove @${p.username} from profiles?`)) await KeepKeep.removeProfile(p.username); },
+        onclick: () => removeWithUndo('p:' + p.username, `Removed @${p.username}`),
       }, icon('trash')),
     );
   }));
@@ -330,7 +330,7 @@ function mediaCard(m, savedProfiles) {
         : el('span', { class: 'owner unknown' }, 'Owner not found'),
       m.username ? profileToggle(m.username, savedProfiles.has(m.username)) : null,
       el('button', {
-        class: 'icon-btn remove', title: 'Remove from KeepKeep', onclick: () => KeepKeep.removeMedia(m.key),
+        class: 'icon-btn remove', title: 'Remove from KeepKeep', onclick: () => removeWithUndo('m:' + m.key, 'Removed from KeepKeep'),
       }, icon('trash'))),
   );
 }
@@ -342,9 +342,27 @@ function profileToggle(username, saved) {
     class: 'icon-btn profile-toggle' + (saved ? ' saved' : ''),
     title: saved ? `@${username} is in Profiles · click to remove` : `Add @${username} to Profiles`,
     onclick: () => (saved
-      ? KeepKeep.removeProfile(username)
+      ? removeWithUndo('p:' + username, `Removed @${username}`)
       : KeepKeep.saveProfile({ username, addedAt: Date.now(), lists: [] })),
   }, icon(saved ? 'personCheck' : 'personAdd'), saved ? icon('personRemove') : null);
+}
+
+// Removing asks nothing; "Undo" brings the item back as it was (its lists
+// too) for 6 seconds – the same as the buttons on Instagram and the app page.
+let undoTimer;
+async function removeWithUndo(key, text) {
+  const record = await KeepKeep.remove(key);
+  if (!record) return;
+  const bar = $('#undo');
+  bar.querySelector('span').textContent = text;
+  bar.querySelector('button').onclick = async () => {
+    clearTimeout(undoTimer);
+    bar.hidden = true;
+    await KeepKeep.restore(key, record);
+  };
+  bar.hidden = false;
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { bar.hidden = true; }, 6000);
 }
 
 async function render() {

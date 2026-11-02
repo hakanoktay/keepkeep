@@ -135,6 +135,7 @@ shared jobs live in one place and every part uses it:
 - Stories the page loaded: `stories-main.js` → `instagram.js` (`pageReels`, `pageHighlight`, `pageUserStories`).
 - App page: trust badges and line (`KeepKeepApp.trustTags`, `TRUST_LINE`), dates (`when`, `fullDate`), `svg`, in `app/core.js`.
 - Lists: every UI changes lists through `basket.js` (`createList`, `setInList`, `setInListMany`, …).
+- Removing a saved item: no question anywhere, and Undo (Instagram's buttons and the corner card, the app's toast, the popup's `#undo`), through `KeepKeep.remove` / `restore`.
 
 After a fix, check every place with the same problem (story viewer from the
 row / a link / a profile, highlights, posts, reels, popup, app) and say which

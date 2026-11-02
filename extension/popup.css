@@ -335,3 +335,14 @@ body.settings-closing #main-view { animation: pane-in-left 0.3s cubic-bezier(0.2
 /* With a post or profile open, the page buttons need the room: the pill keeps only its icon (the title says the rest). */
 .header-actions:has(.page-actions:not([hidden])) .open-label { display: none; }
 .header-actions:has(.page-actions:not([hidden])) .open-app { width: 30px; padding: 0; justify-content: center; }
+/* Removing asks nothing and offers Undo, as on Instagram and in the app */
+#undo {
+  position: fixed; left: 50%; bottom: 14px; z-index: 30; transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px; border-radius: 999px; background: #16101b; color: #fff; font-size: 13px; font-weight: 500;
+  box-shadow: var(--shadow); white-space: nowrap; animation: undo-in 0.18s ease-out;
+}
+#undo[hidden] { display: none; }
+#undo button { font-weight: 700; color: #d9a8f0; }
+#undo button:hover { text-decoration: underline; }
+@keyframes undo-in { from { opacity: 0; transform: translate(-50%, 6px); } }
+
