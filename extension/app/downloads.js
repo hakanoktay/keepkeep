@@ -10,15 +10,7 @@
   let records = []; // newest first
   let grid = null, empty = null, countLine = null, q = '';
 
-  const DAY = 86400000;
-  function dateText(ts) {
-    const days = Math.floor((Date.now() - ts) / DAY);
-    if (days < 1) return 'today';
-    if (days === 1) return 'yesterday';
-    const d = new Date(ts);
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) });
-  }
-  const plural = (n, one) => `${n} ${n === 1 ? one : one + 's'}`;
+  const { plural } = KeepKeep;
 
   async function load() {
     records = (await KeepKeepDownloads.posts().catch(() => [])).sort((a, b) => b.at - a.at);
@@ -36,7 +28,7 @@
       el('div', { class: 'meta' },
         el('div', { class: 'row' },
           el('span', { class: 'owner' + (r.username ? '' : ' unknown'), text: r.username ? '@' + r.username : 'Owner not found' }),
-          el('span', { class: 'date', text: dateText(r.at) })),
+          el('span', { class: 'date', text: KeepKeepApp.when(r.at) })),
         el('span', { class: 'files', text: plural(r.files, 'file') })));
   }
 

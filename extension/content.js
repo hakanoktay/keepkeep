@@ -173,6 +173,8 @@ var KeepKeepDrop = (() => {
     }
   });
 
+  const newJob = () => Math.random().toString(36).slice(2); // a download's id, for the card and the worker
+
   // Stop in the download card: the running downloads end with what is saved
   // so far, and posts still waiting in the queue are dropped. Resume brings
   // back what wasn't saved: the files of the stopped downloads and the posts
@@ -197,7 +199,7 @@ var KeepKeepDrop = (() => {
     for (const again of resumers.splice(0)) again();
   };
   function resumeFiles(username, files, videoQuality) {
-    const job = Math.random().toString(36).slice(2);
+    const job = newJob();
     KeepKeepPanel.downloads.start(job);
     save(job, username, files, videoQuality).catch(() => KeepKeepPanel.downloads.fail(job, "Couldn't download these files"));
   }
@@ -259,7 +261,7 @@ var KeepKeepDrop = (() => {
   // photo, matched by file name across sizes) or { index }. Its file keeps
   // the name it gets when the whole album is downloaded.
   async function download(code, only, force = false) {
-    const job = Math.random().toString(36).slice(2);
+    const job = newJob();
     const ui = KeepKeepPanel.downloads;
     ui.start(job);
     try {
@@ -270,7 +272,7 @@ var KeepKeepDrop = (() => {
       const base = `${post.username || 'instagram'}_${stamp}`;
       const many = post.files.length > 1;
       // The post, for the app's Downloads view.
-      const g = { key: code, url: `https://www.instagram.com/p/${code}/`, username: post.username, type: 'post', thumb: post.thumbUrl };
+      const g = { key: code, url: KeepKeep.postUrl(code), username: post.username, type: 'post', thumb: post.thumbUrl };
       let files = post.files.map((f, i) => ({
         g, id: f.id, url: f.url, fallback: f.fallback, dash: f.dash, kind: f.kind, thumb: f.thumb,
         filename: `${base}${many ? `_${i + 1}` : ''}.${extension(f)}`,
@@ -306,7 +308,7 @@ var KeepKeepDrop = (() => {
   // Saves story items – { username, items: [{ takenAt, files }] } from `load` –
   // one file each, named <username>_<YYMMDDHHmm>_<suffix>[_n].<ext>.
   async function downloadStoryItems(load, suffix, failText, force = false) {
-    const job = Math.random().toString(36).slice(2);
+    const job = newJob();
     const ui = KeepKeepPanel.downloads;
     ui.start(job);
     try {
@@ -318,7 +320,7 @@ var KeepKeepDrop = (() => {
       for (const it of reel.items) {
         // Each story, for the app's Downloads view (its id is its file's).
         const id = it.files[0]?.id;
-        const g = id ? { key: 'story:' + id, url: `https://www.instagram.com/stories/${user}/${id}/`, username: reel.username, type: suffix === 'highlight' ? 'highlight' : 'story', thumb: it.files[0].thumb } : null;
+        const g = id ? { key: 'story:' + id, url: KeepKeep.storyUrl(user, id), username: reel.username, type: suffix === 'highlight' ? 'highlight' : 'story', thumb: it.files[0].thumb } : null;
         for (const f of it.files) {
           let name = `${user}_${compactTime(it.takenAt ? it.takenAt * 1000 : Date.now())}_${suffix}`;
           for (let n = 2; used.has(name); n++) name = name.replace(/(_\d+)?$/, '') + '_' + n; // same minute
@@ -366,7 +368,7 @@ var KeepKeepDrop = (() => {
   }
 
   function downloadAgain(username, files, videoQuality) {
-    const job = Math.random().toString(36).slice(2);
+    const job = newJob();
     KeepKeepPanel.downloads.start(job);
     save(job, username, files, videoQuality, true).catch(() => KeepKeepPanel.downloads.fail(job, "Couldn't download these files"));
   }

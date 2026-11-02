@@ -29,9 +29,7 @@
   // Posts and reels share one embed address, by shortcode.
   const embedUrl = (m) => `https://www.instagram.com/p/${encodeURIComponent(m.code || m.key)}/embed/captioned/`;
 
-  function dateText(ts) {
-    return ts ? `Saved ${new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : '';
-  }
+  const dateText = (ts) => (ts ? `Saved ${KeepKeepApp.fullDate(ts)}` : '');
 
   // Only the lists the post is in (× takes it out); "+ Add to list" opens a
   // small searchable menu of the other media lists, where typing a new name
@@ -134,7 +132,7 @@
   // downloaded before), Save to Media (or "In Media"), Open on Instagram.
   function downloadHead(d) {
     const inMedia = state.media.some((m) => m.key === d.key);
-    const when = new Date(d.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    const when = KeepKeepApp.fullDate(d.at);
     return el('div', { class: 'peek-head' },
       el('div', { class: 'peek-top' },
         el('div', { class: 'peek-who' },

@@ -70,6 +70,10 @@ var KeepKeep = (() => {
   function profileUrl(username) {
     return `${BASE}${username}/`;
   }
+  const postUrl = (code) => media(code, 'post', null).url;
+  const storyUrl = (username, id) => `${BASE}stories/${username}/${id}/`;
+  // "1 file", "3 files": one helper for every count KeepKeep writes.
+  const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
   async function load() {
     const all = await chrome.storage.local.get(null);
@@ -166,7 +170,6 @@ var KeepKeep = (() => {
   // The words for an import's outcome: pass the counts importData() returned,
   // or the error it threw. Returns { ok, title, text }.
   function describeImport(result) {
-    const plural = (n, one) => `${n} ${n === 1 ? one : one + 's'}`;
     if (result instanceof Error) {
       if (result.code === 'newer') return { ok: false, title: 'This backup was made by a newer KeepKeep.', text: 'Update KeepKeep, then import it again. Nothing was changed.' };
       if (result.code === 'damaged') return { ok: false, title: 'This backup file is damaged.', text: 'It was changed or cut off after it was made. Export a new one, then import that. Nothing was changed.' };
@@ -409,6 +412,9 @@ var KeepKeep = (() => {
   return {
     parse,
     profileUrl,
+    postUrl,
+    storyUrl,
+    plural,
     load,
     getProfile: (username) => get('p:' + username),
     getMedia: (key) => get('m:' + key),

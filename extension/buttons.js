@@ -768,7 +768,7 @@
     const pks = InstaApi.pageUserStories(username)?.pks;
     const id = storyOnScreen(pks);
     return id
-      ? { kind: 'media', key: 'story:' + id, code: null, type: 'story', username, url: `https://www.instagram.com/stories/${username}/${id}/` }
+      ? { kind: 'media', key: 'story:' + id, code: null, type: 'story', username, url: KeepKeep.storyUrl(username, id) }
       : { kind: 'media', key: null, username, anyPk: pks?.[0] || null }; // any of its stories will do to download them all
   };
 

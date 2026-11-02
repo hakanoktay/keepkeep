@@ -719,7 +719,7 @@ var KeepKeepPanel = (() => {
 
   const el = (tag, cls, html) => Object.assign(document.createElement(tag), { className: cls || '', innerHTML: html || '' });
   const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
-  const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+  const { plural } = KeepKeep;
 
   function dlMount() {
     if (!dlHost) {

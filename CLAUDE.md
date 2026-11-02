@@ -40,7 +40,8 @@ There is no build step; `extension/` is loaded unpacked as is.
 | `extension/manifest.json` | MV3 manifest, version, content script order |
 | `extension/stories-main.js` | MAIN world, `document_start`: wraps fetch/XHR and answers the "story seen" request locally when anonymous mode is on; also reads the story viewer's reels from the page's GraphQL answers and the HTML's inline JSON (`reels_media`) and posts them (`{keepkeep: 'reels'}`) to `instagram.js` (`pageReels`, `pageHighlight`), which uses them before the old endpoint |
 | `extension/veil.js`, `veil.css` | Anonymous-mode theme ("the veil"): purple tint via Instagram's CSS variables, story rings (89px canvases tinted with a filter), mask badges, capsule, reply/reaction warnings, the "will be able to see" gate answer |
-| `extension/basket.js` | Storage of saved profiles / media / lists |
+| `extension/settings-defaults.js` | `KeepKeepSettings`: every setting, its values and its default (`get()`, `value(key, stored)`, `read`, `KEYS`, `VALUES`). Loaded first everywhere (veil.js's content-script group, popup, app, `importScripts` in background). No other file decides what an unset setting is (a test checks) |
+| `extension/basket.js` | Storage of saved profiles / media / lists; also the shared `KeepKeep.plural`, `postUrl`, `storyUrl` |
 | `extension/instagram.js` | Instagram data: `mediaFiles(code, {originals})`, `embedOriginals`, `story(pk)`, `storyReel(pk)`, `filesOf`, `fileKey`, `dashOf(item)` (1080p DASH info: `dash = {video, audio|null, duration, fallbackHeight}`, only when larger than the largest `video_versions` entry; `filesOf` adds it to video files) |
 | `extension/panel.js` | In-page "add to list" card |
 | `extension/content.js` | `download(code)`, `downloadStory(pk)`, `pageInfo`; normalises `videoQuality` (missing/other → `standard`, the owner's default since 2026-11-02) and sends `mode` + `dash` |
@@ -122,6 +123,22 @@ There is no build step; `extension/` is loaded unpacked as is.
   open it. Best was the default until 2026-11-02; now **Standard** is (the
   owner's decision: 1080p files are big and joining can take long). Don't
   raise it again.
+
+## One place for each job (don't copy)
+
+A fix made in one copy and forgotten in another is how bugs come back, so
+shared jobs live in one place and every part uses it:
+
+- Settings and defaults: `settings-defaults.js` (`KeepKeepSettings`).
+- Counts ("3 files"), post / story addresses: `basket.js` (`KeepKeep.plural`, `postUrl`, `storyUrl`, `profileUrl`, `parse`).
+- The story on screen (highlights and an account's stories): `storyOnScreen(pks)` in `buttons.js`, with `storyIdOnScreen` and `progressPosition`.
+- Stories the page loaded: `stories-main.js` → `instagram.js` (`pageReels`, `pageHighlight`, `pageUserStories`).
+- App page: trust badges and line (`KeepKeepApp.trustTags`, `TRUST_LINE`), dates (`when`, `fullDate`), `svg`, in `app/core.js`.
+- Lists: every UI changes lists through `basket.js` (`createList`, `setInList`, `setInListMany`, …).
+
+After a fix, check every place with the same problem (story viewer from the
+row / a link / a profile, highlights, posts, reels, popup, app) and say which
+were checked.
 
 ## Hard-won fixes (don't regress)
 

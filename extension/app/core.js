@@ -53,6 +53,39 @@ const KeepKeepApp = (() => {
     return span;
   }
 
+  // The trust badges and line: the same wherever the app shows them (About,
+  // Welcome). Keep the wording exact (CLAUDE.md, "The privacy message").
+  const TRUST_TAGS = [
+    ['No password', true, '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>'],
+    ['No tracking', false, '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c5 0 9 4.5 10 7a13 13 0 0 1-2.6 3.6M6.6 6.6C4.3 8 2.7 10.3 2 12c1 2.5 5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'],
+    ['No ads', false, '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>'],
+  ];
+  const TRUST_LINE = 'Never asks for your password. Nothing leaves your computer.';
+  function svg(inner) {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.innerHTML = inner;
+    return s;
+  }
+  const trustTags = (attrs = {}) => el('ul', { class: 'tags', ...attrs },
+    TRUST_TAGS.map(([text, strong, path]) => el('li', { class: 'tag' + (strong ? ' strong' : '') }, svg(path), text)));
+
+  // Dates. `when`, for the grids' cards: today, yesterday, 3 days ago,
+  // 2 weeks ago, else 5 Oct (with the year when it isn't this year).
+  // `fullDate`, for the side panel: 5 Oct 2026.
+  const DAY = 86400000;
+  function when(ts) {
+    if (!ts) return '';
+    const days = Math.floor((Date.now() - ts) / DAY);
+    if (days < 1) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 7) return `${days} days ago`;
+    if (days < 30) { const w = Math.floor(days / 7); return w === 1 ? '1 week ago' : `${w} weeks ago`; }
+    const d = new Date(ts);
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) });
+  }
+  const fullDate = (ts) => (ts ? new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+
   function on(event, fn) { (handlers[event] ||= []).push(fn); }
   function emit(event) { for (const fn of handlers[event] || []) fn(); }
 
@@ -118,7 +151,7 @@ const KeepKeepApp = (() => {
       .finally(() => { loaded = true; route(); });
   }
 
-  return { view, go, state, on, emit, el, icon, start, route, renderNav: () => loaded && renderNav(), hasView: (id) => views.has(id) };
+  return { view, go, state, on, emit, el, icon, svg, trustTags, TRUST_LINE, when, fullDate, start, route, renderNav: () => loaded && renderNav(), hasView: (id) => views.has(id) };
 })();
 
 // Start once every view file has registered itself (scripts run before DOMContentLoaded fires).

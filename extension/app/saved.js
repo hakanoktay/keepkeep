@@ -59,17 +59,6 @@
     return items.sort((a, b) => dir * ((a.addedAt || 0) - (b.addedAt || 0)));
   }
 
-  function relativeDate(ts) {
-    if (!ts) return '';
-    const days = Math.floor((Date.now() - ts) / DAY);
-    if (days < 1) return 'today';
-    if (days === 1) return 'yesterday';
-    if (days < 7) return `${days} days ago`;
-    if (days < 30) { const w = Math.floor(days / 7); return w === 1 ? '1 week ago' : `${w} weeks ago`; }
-    const d = new Date(ts);
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) });
-  }
-
   const chips = (item) => el('div', { class: 'chips' },
     (item.lists || []).map(listName).filter(Boolean).map((name) => el('span', { class: 'chip', text: name })));
 
@@ -91,7 +80,7 @@
       el('div', { class: 'meta' },
         el('div', { class: 'row' },
           el('span', { class: 'owner' + (m.username ? '' : ' unknown'), text: m.username ? '@' + m.username : 'Owner not found' }),
-          el('span', { class: 'date', text: relativeDate(m.addedAt) })),
+          el('span', { class: 'date', text: KeepKeepApp.when(m.addedAt) })),
         chips(m)));
   }
 
@@ -111,7 +100,7 @@
       el('div', { class: 'meta' },
         el('div', { class: 'row' },
           el('span', { class: 'media-count', text: `${count} media` }),
-          el('span', { class: 'date', text: relativeDate(p.addedAt) })),
+          el('span', { class: 'date', text: KeepKeepApp.when(p.addedAt) })),
         chips(p)));
   }
 
