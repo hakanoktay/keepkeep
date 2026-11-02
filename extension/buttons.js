@@ -735,13 +735,15 @@
     return index < 0 ? null : { index, count: segments.length };
   }
 
-  // The story of a highlight on screen: its picture's id, or (a video) the
-  // progress bar's position in Instagram's list – only if the counts agree.
-  function highlightStoryId(id) {
+  // The story on screen, for a highlight and an account's stories alike: its
+  // picture's id, or (a video: blob:, no picture) the progress bar's position
+  // in `pks`, the stories in the viewer's order – only if the counts agree; a
+  // single story is that one.
+  function storyOnScreen(pks) {
     const fromPicture = storyIdOnScreen();
-    if (fromPicture) return fromPicture;
-    const pks = highlightData(id)?.pks;
-    const pos = pks && progressPosition();
+    if (fromPicture || !pks?.length) return fromPicture;
+    if (pks.length === 1) return pks[0];
+    const pos = progressPosition();
     return pos && pos.count === pks.length ? pks[pos.index] : null;
   }
 
@@ -750,7 +752,7 @@
     if (hl) {
       const username = highlightOwner(hl[1]);
       if (!username) return null;
-      const id = highlightStoryId(hl[1]);
+      const id = storyOnScreen(highlightData(hl[1])?.pks);
       const url = `https://www.instagram.com/stories/highlights/${hl[1]}/`;
       return id
         ? { kind: 'media', key: 'story:' + id, code: null, type: 'highlight', highlightId: hl[1], username, url }
@@ -762,14 +764,9 @@
     if (!m || m[1] === 'highlights') return null;
     const username = m[1].toLowerCase();
     // Opened from the stories row or a link, the address has no id for a
-    // while. A photo's id is in its picture; a video (blob:, no picture) is
-    // found from the progress bar in the stories the page loaded.
+    // while: the story is found as in a highlight, in the stories the page loaded.
     const pks = InstaApi.pageUserStories(username)?.pks;
-    let id = storyIdOnScreen();
-    if (!id && pks?.length) {
-      const pos = progressPosition();
-      id = pos && pos.count === pks.length ? pks[pos.index] : pks.length === 1 ? pks[0] : null;
-    }
+    const id = storyOnScreen(pks);
     return id
       ? { kind: 'media', key: 'story:' + id, code: null, type: 'story', username, url: `https://www.instagram.com/stories/${username}/${id}/` }
       : { kind: 'media', key: null, username, anyPk: pks?.[0] || null }; // any of its stories will do to download them all

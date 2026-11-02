@@ -8,7 +8,7 @@ const src = (f) => fs.readFileSync(path.join(__dirname, '..', 'extension', f), '
 async function cardWithLists(context, extensionId) {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/offscreen.html`);
-  await page.evaluate(src('basket.js') + src('panel.js') + ';window.KeepKeep = KeepKeep; window.KeepKeepPanel = KeepKeepPanel;');
+  await page.evaluate(src('settings-defaults.js') + src('basket.js') + src('panel.js') + ';window.KeepKeep = KeepKeep; window.KeepKeepPanel = KeepKeepPanel;');
   await page.evaluate(async () => {
     await chrome.storage.local.clear();
     await chrome.storage.local.set({

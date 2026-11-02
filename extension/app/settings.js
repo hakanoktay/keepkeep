@@ -20,11 +20,11 @@
 
   // ---- Settings ----
   async function syncSettings() {
-    const { photoSize, videoQuality, anonStories } = await chrome.storage.local.get(['photoSize', 'videoQuality', 'anonStories']);
-    for (const input of document.querySelectorAll('input[name=photo-size]')) input.checked = input.value === (photoSize === 'standard' ? 'standard' : 'original');
-    for (const input of document.querySelectorAll('input[name=video-quality]')) input.checked = input.value === (videoQuality === 'original' || videoQuality === 'best' ? videoQuality : 'standard');
+    const { photoSize, videoQuality, anonStories } = await KeepKeepSettings.get();
+    for (const input of document.querySelectorAll('input[name=photo-size]')) input.checked = input.value === photoSize;
+    for (const input of document.querySelectorAll('input[name=video-quality]')) input.checked = input.value === videoQuality;
     const anon = document.getElementById('anon-stories');
-    if (anon) anon.checked = anonStories === true;
+    if (anon) anon.checked = anonStories;
   }
 
   function option(name, key, value, title, desc) {

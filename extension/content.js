@@ -263,8 +263,8 @@ var KeepKeepDrop = (() => {
     const ui = KeepKeepPanel.downloads;
     ui.start(job);
     try {
-      const { photoSize, videoQuality } = await chrome.storage.local.get(['photoSize', 'videoQuality']);
-      const post = await InstaApi.mediaFiles(code, { originals: photoSize !== 'standard' });
+      const { photoSize, videoQuality } = await KeepKeepSettings.get();
+      const post = await InstaApi.mediaFiles(code, { originals: photoSize === 'original' });
       if (!post.files.length) throw new Error('no files');
       const stamp = compactTime(post.takenAt ? post.takenAt * 1000 : Date.now());
       const base = `${post.username || 'instagram'}_${stamp}`;
@@ -311,7 +311,7 @@ var KeepKeepDrop = (() => {
     ui.start(job);
     try {
       const reel = await load();
-      const { videoQuality } = await chrome.storage.local.get('videoQuality');
+      const { videoQuality } = await KeepKeepSettings.get();
       const user = reel.username || 'instagram';
       const files = [];
       const used = new Set();
@@ -350,7 +350,7 @@ var KeepKeepDrop = (() => {
     const groups = [...new Set(files.map((f) => f.g).filter(Boolean))]
       .map((g) => ({ ...g, files: files.flatMap((f, i) => (f.g === g ? [i] : [])) }));
     const res = await chrome.runtime.sendMessage({
-      type: 'download', job, mode: videoMode(videoQuality), force, groups,
+      type: 'download', job, mode: KeepKeepSettings.value('videoQuality', videoQuality), force, groups,
       files: files.map(({ id, url, fallback, dash, filename }) => ({ id, url, fallback, dash, filename })),
     });
     if (!res?.ok) throw new Error(res?.error || 'failed');
@@ -369,14 +369,6 @@ var KeepKeepDrop = (() => {
     const job = Math.random().toString(36).slice(2);
     KeepKeepPanel.downloads.start(job);
     save(job, username, files, videoQuality, true).catch(() => KeepKeepPanel.downloads.fail(job, "Couldn't download these files"));
-  }
-
-  // The Video quality setting: 'original' or 'best' as stored, anything else
-  // (nothing stored, an unknown value) 'standard': the default, since 1080p
-  // files are big and slow to join. Videos with Instagram's DASH files come up
-  // to 1080p in Best / Original; Standard is the single file.
-  function videoMode(stored) {
-    return stored === 'original' || stored === 'best' ? stored : 'standard';
   }
 
   // 2025-07-27 14:32 → "2507271432" (local time)

@@ -480,30 +480,25 @@ document.addEventListener('keydown', (e) => {
 });
 
 async function renderSettings() {
-  const { photoSize, videoQuality, anonStories } = await chrome.storage.local.get(['photoSize', 'videoQuality', 'anonStories']);
-  $('#anon-stories').checked = anonStories === true;
-  for (const input of document.querySelectorAll('input[name=photo-size]')) {
-    input.checked = input.value === (photoSize === 'standard' ? 'standard' : 'original');
-  }
-  for (const input of document.querySelectorAll('input[name=video-quality]')) {
-    input.checked = input.value === (videoQuality === 'original' || videoQuality === 'best' ? videoQuality : 'standard');
-  }
+  const { photoSize, videoQuality, anonStories } = await KeepKeepSettings.get();
+  $('#anon-stories').checked = anonStories;
+  for (const input of document.querySelectorAll('input[name=photo-size]')) input.checked = input.value === photoSize;
+  for (const input of document.querySelectorAll('input[name=video-quality]')) input.checked = input.value === videoQuality;
   $('.about .version').textContent = 'v' + chrome.runtime.getManifest().version;
 }
 $('#anon-stories').addEventListener('change', (e) => chrome.storage.local.set({ anonStories: e.target.checked }));
 // Like a private window: the mask button in the header switches anonymous
 // stories on and off, and a purple band shows while it's on.
 async function renderAnon() {
-  const { anonStories } = await chrome.storage.local.get('anonStories');
-  const onNow = anonStories === true;
+  const { anonStories: onNow } = await KeepKeepSettings.get();
   $('#anon-toggle').classList.toggle('on', onNow);
   $('#anon-toggle').title = onNow ? 'Stop watching stories anonymously' : 'Watch stories anonymously';
   $('#anon-band').hidden = !onNow;
   $('#anon-stories').checked = onNow;
 }
 $('#anon-toggle').addEventListener('click', async () => {
-  const { anonStories } = await chrome.storage.local.get('anonStories');
-  chrome.storage.local.set({ anonStories: anonStories !== true });
+  const { anonStories } = await KeepKeepSettings.get();
+  chrome.storage.local.set({ anonStories: !anonStories });
 });
 $('#anon-band button').addEventListener('click', () => chrome.storage.local.set({ anonStories: false }));
 chrome.storage.onChanged.addListener((changes) => changes.anonStories && renderAnon());

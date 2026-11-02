@@ -52,6 +52,7 @@
         "https://instagram.com/*"
       ],
       "js": [
+        "settings-defaults.js",
         "veil.js"
       ],
       "run_at": "document_start",

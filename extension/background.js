@@ -2,7 +2,7 @@
 // Background work the content script can't do itself because Instagram's CDN
 // is on a different origin: making thumbnails (downloads an image, crops it to
 // a square and returns a data: URL) and downloading posts.
-importScripts('app/whats-new.js', 'downloads-db.js'); // shouldShowWhatsNew, pagesToOpen; KeepKeepDownloads
+importScripts('settings-defaults.js', 'app/whats-new.js', 'downloads-db.js'); // KeepKeepSettings; shouldShowWhatsNew, pagesToOpen; KeepKeepDownloads
 
 const ALLOWED_HOSTS = /(^|\.)(cdninstagram\.com|fbcdn\.net)$/;
 
@@ -68,8 +68,8 @@ async function startDownload({ job, mode, files, force, groups }, tabId) {
   // Files saved before are skipped (shown as done in the card) unless `force`
   // or the user turned it off (Downloads view: "Skip files downloaded before").
   const skipped = [];
-  const { skipDownloaded } = await chrome.storage.local.get('skipDownloaded');
-  if (!force && skipDownloaded !== false) {
+  const { skipDownloaded } = await KeepKeepSettings.get();
+  if (!force && skipDownloaded) {
     const seen = await Promise.all(files.map((f) => savedBefore(f, mode).catch(() => null)));
     files = files.filter((f, i) => {
       if (!seen[i]) return true;
@@ -231,10 +231,10 @@ async function thumbnail(url, size) {
 // ---- Anonymous stories: a masked toolbar icon, like a private window ----
 
 async function showAnonIcon() {
-  const { anonStories } = await chrome.storage.local.get('anonStories');
-  const name = anonStories === true ? 'anon' : 'icon';
+  const { anonStories } = await KeepKeepSettings.get();
+  const name = anonStories ? 'anon' : 'icon';
   await chrome.action.setIcon({ path: Object.fromEntries([16, 32, 48, 128].map((s) => [s, `icons/${name}${s}.png`])) });
-  await chrome.action.setTitle({ title: anonStories === true ? 'KeepKeep – watching stories anonymously' : 'KeepKeep' });
+  await chrome.action.setTitle({ title: anonStories ? 'KeepKeep – watching stories anonymously' : 'KeepKeep' });
 }
 chrome.storage.onChanged.addListener((changes, area) => area === 'local' && changes.anonStories && showAnonIcon());
 chrome.runtime.onStartup.addListener(showAnonIcon);

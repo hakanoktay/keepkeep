@@ -12,7 +12,7 @@ async function balloons(context, extensionId, n) {
   const page = await context.newPage();
   await page.setViewportSize({ width: 1200, height: 800 });
   await page.goto(`chrome-extension://${extensionId}/offscreen.html`);
-  await page.evaluate(src('basket.js') + src('panel.js') + ';window.KeepKeepPanel = KeepKeepPanel;');
+  await page.evaluate(src('settings-defaults.js') + src('basket.js') + src('panel.js') + ';window.KeepKeepPanel = KeepKeepPanel;');
   // A page button right under where the balloons sit (top right).
   await page.evaluate(() => {
     // One of KeepKeep's own buttons on the page (they carry data-keepkeep), and a plain page link.

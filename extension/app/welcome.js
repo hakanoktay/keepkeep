@@ -27,10 +27,10 @@
       ? el('span', {}, el('b', { text: 'Anonymous stories are on.' }), " You won't appear in viewers lists, and Instagram turns KeepKeep purple so you always know. Switch it off any time in KeepKeep's popup.")
       : el('span', {}, el('b', { text: 'Anonymous stories are off.' }), ' Story owners see you in their viewers lists. ',
         el('button', { type: 'button', class: 'link-btn', id: 'anon-on', onclick: () => chrome.storage.local.set({ anonStories: true }) }, 'Turn them on')));
-    chrome.storage.local.get('anonStories').then(({ anonStories }) => paint(anonStories === true));
+    KeepKeepSettings.get().then(({ anonStories }) => paint(anonStories));
     const follow = (changes) => {
       if (!note.isConnected) return chrome.storage.onChanged.removeListener(follow);
-      if ('anonStories' in changes) paint(changes.anonStories.newValue === true);
+      if ('anonStories' in changes) paint(KeepKeepSettings.value('anonStories', changes.anonStories.newValue));
     };
     chrome.storage.onChanged.addListener(follow);
     return note;

@@ -280,7 +280,8 @@ test('the background keeps DASH files only from Instagram\'s CDN', async ({ cont
     { url: V + 'p.mp4', filename: 'one.mp4', dash: { video: { url: 'https://evil.example/v.mp4' }, audio: null, duration: 2 } },
     { url: V + 'p.mp4', filename: 'two.mp4', dash: { video: { url: V + 'v1080.mp4' }, audio: { url: 'https://evil.example/a.mp4' }, duration: 2 } },
   ] }), V);
-  expect(res).toEqual({ ok: true, filenames: ['one.mp4', 'two.mp4'], skipped: [], saved: [0, 1] });
+  expect(res).toMatchObject({ ok: true, filenames: ['one.mp4', 'two.mp4'], skipped: [], saved: [0, 1] });
+  expect(res.ids).toHaveLength(2); // Chrome's download ids (the stopped card's trash uses them)
   expect(urls).toEqual([V + 'p.mp4', V + 'p.mp4']); // neither DASH pair was tried
   const files = await savedFiles(ext);
   expect(files).toHaveLength(2);

@@ -22,3 +22,20 @@ test('no user-visible "basket" text in the extension', () => {
     expect(text.match(/.{0,30}basket.{0,30}/gi), f).toBeNull();
   }
 });
+
+// Every setting is read through settings-defaults.js (KeepKeepSettings), so a
+// default changes in one line: no other file decides what an unset setting is.
+test('setting defaults live in one place', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const dir = path.join(__dirname, '..', 'extension');
+  const files = [...fs.readdirSync(dir).filter((f) => f.endsWith('.js')), ...fs.readdirSync(path.join(dir, 'app')).map((f) => 'app/' + f)]
+    .filter((f) => f !== 'settings-defaults.js');
+  const own = /anonStories\s*(===|!==)\s*true|skipDownloaded\s*(===|!==)\s*false|photoSize\s*(===|!==)\s*'standard'|videoQuality\s*===\s*'(original|best|standard)'\s*\|\|/;
+  for (const f of files) {
+    const text = fs.readFileSync(path.join(dir, f), 'utf8');
+    expect(own.test(text), f).toBe(false);
+    if (/chrome\.storage\.local\.get\(\s*\[?\s*'(photoSize|videoQuality|anonStories|skipDownloaded)'/.test(text)) throw new Error(`${f} reads a setting itself: use KeepKeepSettings.get()`);
+  }
+});
+

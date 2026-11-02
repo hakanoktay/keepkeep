@@ -98,7 +98,7 @@
   function toolbar() {
     pops = [];
     const skip = el('input', { type: 'checkbox', id: 'skip-downloaded', onchange: (e) => chrome.storage.local.set({ skipDownloaded: e.target.checked }) });
-    chrome.storage.local.get('skipDownloaded').then(({ skipDownloaded }) => { skip.checked = skipDownloaded !== false; });
+    KeepKeepSettings.get().then(({ skipDownloaded }) => { skip.checked = skipDownloaded; });
     const helpBtn = el('button', { type: 'button', class: 'help', id: 'skip-help-btn', 'aria-label': 'What does this do?', 'aria-expanded': 'false', 'aria-controls': 'skip-help', text: '?' });
     const help = el('div', { class: 'pop-card skip-help', id: 'skip-help', role: 'note', hidden: true },
       el('b', { text: 'Skip files downloaded before' }),

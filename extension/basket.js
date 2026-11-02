@@ -122,7 +122,7 @@ var KeepKeep = (() => {
 
   const BACKUP = 'keepkeep-backup';
   const BACKUP_VERSION = 1;
-  const SETTINGS = ['photoSize', 'videoQuality', 'anonStories', 'skipDownloaded'];
+  const SETTINGS = KeepKeepSettings.KEYS;
 
   // A backup carries a check of its lists and items, so a file that was cut
   // off or damaged after it was made is refused instead of half imported.
@@ -224,14 +224,8 @@ var KeepKeep = (() => {
     });
   }
 
-  // Settings: the values each one can have, and what it is when never set.
-  const SETTING_VALUES = { photoSize: ['original', 'standard'], videoQuality: ['best', 'original', 'standard'], anonStories: [true, false], skipDownloaded: [true, false] };
-  const settingNow = {
-    photoSize: (v) => (v === 'standard' ? 'standard' : 'original'),
-    videoQuality: (v) => (v === 'original' || v === 'best' ? v : 'standard'),
-    anonStories: (v) => v === true,
-    skipDownloaded: (v) => v !== false,
-  };
+  const SETTING_VALUES = KeepKeepSettings.VALUES;
+  const settingNow = (k, v) => KeepKeepSettings.value(k, v);
 
   // A backup's settings are this computer's choice: importing never sets them.
   // It returns the ones that differ ({ key, theirs, ours }) so the page can
@@ -239,8 +233,8 @@ var KeepKeep = (() => {
   async function settingsToOffer(raw) {
     if (!raw || typeof raw !== 'object') return [];
     const here = await chrome.storage.local.get(SETTINGS);
-    return SETTINGS.filter((k) => SETTING_VALUES[k].includes(raw[k]) && raw[k] !== settingNow[k](here[k]))
-      .map((k) => ({ key: k, theirs: raw[k], ours: settingNow[k](here[k]) }));
+    return SETTINGS.filter((k) => SETTING_VALUES[k].includes(raw[k]) && raw[k] !== settingNow(k, here[k]))
+      .map((k) => ({ key: k, theirs: raw[k], ours: settingNow(k, here[k]) }));
   }
 
   async function applyBackupSettings(offered) {

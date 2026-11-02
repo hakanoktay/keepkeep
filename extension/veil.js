@@ -409,9 +409,9 @@
     render();
   }
 
-  chrome.storage.local.get('anonStories').then(({ anonStories }) => apply(anonStories === true, false), () => {});
+  KeepKeepSettings.get().then(({ anonStories }) => apply(anonStories, false), () => {});
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.anonStories) apply(changes.anonStories.newValue === true, true);
+    if (area === 'local' && changes.anonStories) apply(KeepKeepSettings.value('anonStories', changes.anonStories.newValue), true);
   });
   // Instagram changes pages without reloading.
   let path = location.pathname;

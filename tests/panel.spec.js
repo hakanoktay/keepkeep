@@ -10,7 +10,7 @@ async function cardPage(context, extensionId) {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/offscreen.html`);
   // Evaluated over the debugger, so the extension page's CSP doesn't apply.
-  await page.evaluate(src('basket.js') + src('panel.js') + ';window.KeepKeep = KeepKeep; window.KeepKeepPanel = KeepKeepPanel;');
+  await page.evaluate(src('settings-defaults.js') + src('basket.js') + src('panel.js') + ';window.KeepKeep = KeepKeep; window.KeepKeepPanel = KeepKeepPanel;');
   await page.evaluate(async () => {
     await chrome.storage.local.clear();
     await chrome.storage.local.set({
