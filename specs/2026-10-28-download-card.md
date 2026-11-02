@@ -34,7 +34,8 @@ changing how the card behaves, so a rejected idea doesn't come back.
   5 files" with a purple **▶ Resume** across from the name, and one row says
   "Download stopped · 2 of 5 files saved". Resume downloads only what wasn't
   saved (also posts that were still waiting in the app's queue), in the same
-  card. A stopped card stays 12 s (8 s after the pointer leaves it). Whatever
+  card. A stopped card stays 6 s, and while hovered (2.5 s after the pointer
+  leaves); 12 s was too long for the owner. Whatever
   hasn't answered 4 s after Stop is ended by the card itself. Once a download
   is done, the chevron goes, so "Saved to Downloads/KeepKeep" fits.
 - **Minimise** (the chevron) is on every download, a single file too; folded,

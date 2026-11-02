@@ -799,7 +799,7 @@ var KeepKeepPanel = (() => {
     for (const type of ['wheel', 'touchstart', 'pointerdown']) track.addEventListener(type, browse, { passive: true });
     card.addEventListener('pointerleave', () => { if (b.browsing) b.backTimer = setTimeout(back, 1500); });
     card.addEventListener('pointerenter', () => { clearTimeout(b.backTimer); if (b.ending) clearTimeout(b.endTimer); });
-    card.addEventListener('pointerleave', () => { if (b.ending && board === b) leaveLater(b, b.halted ? 8000 : 2500); });
+    card.addEventListener('pointerleave', () => { if (b.ending && board === b) leaveLater(b, 2500); });
     moreRow.addEventListener('click', (e) => { if (b.browsing) { e.stopPropagation(); back(); } });
     // The list's height eases with the window; the card follows once it has settled.
     track.addEventListener('transitionend', (e) => { if (e.propertyName === 'height' && board === b) fitHeight(); });
@@ -979,7 +979,7 @@ var KeepKeepPanel = (() => {
       b.header.querySelector('.state').before(button);
     }
     b.ending = true;
-    if (!b.card.matches(':hover')) leaveLater(b, b.halted ? 12000 : again.length ? 9000 : files.length ? 4000 : 3500);
+    if (!b.card.matches(':hover')) leaveLater(b, b.halted ? 6000 : again.length ? 9000 : files.length ? 4000 : 3500);
   }
 
   function leaveLater(b, ms) {
